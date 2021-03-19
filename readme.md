@@ -208,7 +208,13 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 #### 2.CountDownLatch，CyclicBarrier，Semaphore
 
 1. CountDownLatch
+
+   别名闭锁，AQS实现，计数器实现
+
+   
+
 2. CyclicBarrier
+
 3. Semaphore
 
 #### 3.Volatile
