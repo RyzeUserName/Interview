@@ -626,9 +626,40 @@ SourceFile: "Synchronized.java"
 
 之后对锁做了优化
 
+![图片](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpyB6WkMTL2IUapfTtGH6FFOiaEtKGL0EickicibDjwEqKRK8rMUz7kxlSmiapXejO8fmmcyBGBSSju8TYQ/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
 
+1.偏向锁
+
+**偏向锁的目标是，减少无竞争且只有一个线程使用锁的情况下，使用轻量级锁产生的性能消耗**
+
+在Mark Word中CAS记录owner,偏向锁获取成功，记录锁状态为偏向锁,本线程可以不用cas也可以获取锁
+
+否则，说明有其他线程竞争，膨胀为轻量级锁
+
+采用cas 方式
+
+2.轻量级锁
+
+**轻量级锁的目标是，减少无实际竞争情况下，使用重量级锁产生的性能消耗**
+
+仅仅将Mark Word中的部分字节CAS更新指向线程栈中的Lock Record，如果更新成功，则轻量级锁获取成功，
+
+记录锁状态为轻量级锁 ，否则，说明已经有线程获得了轻量级锁，目前发生了锁竞争（不适合继续使用轻量级锁）,接下来膨胀为重量级锁
+采用cas 方式
+
+3.自旋锁
+
+**自旋锁的目标是，通过自旋，减少线程上线文切换**
 
 #### 6.AQS
+
+AbstractQueuedSynchronizer
+
+抽象队列同步器
+
+ReentrantLock、ReentrantReadWriteLock、CountDownLatch、Semaphore等都是基于AQS 实现
+
+
 
 ### 3.tcp/http
 
