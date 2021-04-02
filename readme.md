@@ -207,21 +207,426 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 
 #### 2.CountDownLatch，CyclicBarrier，Semaphore
 
-1. CountDownLatch
+1. **CountDownLatch**
 
-   别名闭锁，AQS实现，计数器实现
+   别名闭锁，AQS实现
+
+   构造：CountDownLatch(int count)
+
+   使用：
+
+    		1.初始化个数量
+
+   ​		 2.在需要并行执行的代码前加 CountDownLatch.await() 
+
+   ​		 3.执行 CountDownLatch.countDown() 减少次数，当次数减少到0，await 之后的代码并行执行
+
+   举例：
+
+   ```java
+   public class CountDownLatchTest {
+       private static final CountDownLatch COUNT_DOWN_LATCH = new CountDownLatch(8);
+       public static void main(String[] args) {
+           for (int i = 0; i < 8; i++) {
+               new ThreadMy(i, COUNT_DOWN_LATCH).start();
+               COUNT_DOWN_LATCH.countDown();
+                System.out.println("闭锁 剩余 " + COUNT_DOWN_LATCH.getCount());
+           }
+       }
+       static class ThreadMy extends Thread {
+           private final int i;
+           private final CountDownLatch countDownLatch;
+           public ThreadMy(int i, CountDownLatch countDownLatch) {
+               this.i = i;
+               this.countDownLatch = countDownLatch;
+           }
+           @Override
+           public void run() {
+               try {
+                   countDownLatch.await();
+                   System.out.println("需要并行执行的代码----" + i);
+               } catch (Exception e) {
+                   System.out.println("发生异常");
+               }
+           }
+       }
+   }
+   ```
+
+   结果：
+
+   ```txt
+   闭锁 剩余 7
+   闭锁 剩余 6
+   闭锁 剩余 5
+   闭锁 剩余 4
+   闭锁 剩余 3
+   闭锁 剩余 2
+   闭锁 剩余 1
+   闭锁 剩余 0
+   需要并行执行的代码----2
+   需要并行执行的代码----3
+   需要并行执行的代码----6
+   需要并行执行的代码----7
+   需要并行执行的代码----0
+   需要并行执行的代码----1
+   需要并行执行的代码----4
+   需要并行执行的代码----5
+   ```
 
    
 
-2. CyclicBarrier
+2. **CyclicBarrier**
 
-3. Semaphore
+   别名： 同步屏障,一组线程到达某个指定 终点 时，相互等待，直到指定数量的线程都达到，才会一起往下走
+
+   实现： ReentrantLock 重入锁
+
+   构造：  CyclicBarrier(int parties, Runnable barrierAction) 
+
+   使用：
+
+   ​	1.初始化 数量 和 需要达到指定位置  执行指定代码
+
+   ​	2.前置准备好了，调用CyclicBarrier.await()  , CyclicBarrier 数量增加1 直到指定数量，各线程并行执行 CyclicBarrier.await()之后的代码
+
+   示例：
+
+   ```java
+   public class CyclicBarrierTest {
+       public static final Runnable RUNNABLE = () -> {
+           System.out.println("都到达，执行需要代码");
+       };
+       public static final CyclicBarrier CYCLIC_BARRIER = new CyclicBarrier(2, RUNNABLE);
+   
+       public static void main(String[] args) {
+           for (int i = 0; i < 2; i++) {
+               new ThreadMy(i, CYCLIC_BARRIER).start();
+           }
+       }
+       static class ThreadMy extends Thread {
+           private final int i;
+           private final CyclicBarrier cyclicBarrier;
+   
+           public ThreadMy(int i, CyclicBarrier cyclicBarrier) {
+               this.i = i;
+               this.cyclicBarrier = cyclicBarrier;
+           }
+   
+           @Override
+           public void run() {
+               try {
+                   System.out.println("准备好了" + i);
+                   int await = cyclicBarrier.await();
+                   System.out.println(await+"---执行后面----" + i);
+               } catch (Exception e) {
+                   System.out.println("发生异常");
+               }
+           }
+       }
+   }
+   ```
+
+   结果：
+
+   ```txt
+   准备好了1
+   准备好了0
+   都到达，执行需要代码
+   0---执行后面----0
+   1---执行后面----1
+   ```
+
+   
+
+3. **Semaphore**
+
+   别名：信号量，用来控制同一时间，资源可被访问的线程数量，一般可用于流量的控制
+
+   构造：Semaphore(int permits, boolean fair)
+
+   ​	后面的参数即 是否是公平锁，默认非公平锁，实现是AQS
+
+   使用：
+
+   ​	1.SEMAPHORE.acquire()  或者 SEMAPHORE.tryAcquire() 或者 SEMAPHORE.acquire(n)获取锁
+
+   ​	2.执行代码
+
+   ​	3.SEMAPHORE.release() 释放 SEMAPHORE.release(n)  释放多个
+
+   示例：
+
+   ```java
+   public class SemaphoreTest {
+       public static final Semaphore SEMAPHORE = new Semaphore(2);
+   
+       public static void main(String[] args) {
+           for (int i = 0; i < 10; i++) {
+               new Thread(() -> {
+                   try {
+                       SEMAPHORE.acquire();
+                       Thread.sleep(2000);
+                       System.out.println("执行");
+                       SEMAPHORE.release();
+                   } catch (InterruptedException e) {
+                       e.printStackTrace();
+                   }
+               }).start();
+           }
+       }
+   }
+   ```
+
+   结果：
+
+   每隔两秒 打印一组 
 
 #### 3.Volatile
 
+​	java 线程与内存的关系
+
+​	![](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpzhiaXUhn9W2XjuqeziaG1ibdvOgPyiaPib3U7oR6ZS77CqlAVp7BkTxS30UhDN1X6YJRfCGQadBP6xd9Q/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+
+①不同线程之间存在可见性问题
+
+解决：
+
+1.加锁
+
+2.Volatile 修饰共享变量
+
+Volatile 的实现 是依靠 处理器访问缓存遵循一些一致性协议（MSI、MESI、MOSI、Synapse、Firefly及DragonProtocol等）
+
+②禁止指令重排序
+
+为了提高性能，编译器和处理器常常会对既定的代码执行顺序进行指令重排序。
+
+怎么做的？
+
+在适当位置插入内存屏障
+
+写：
+
+![图片](https://gitee.com/lifutian66/img/raw/master/img/640)
+
+读：
+
+![图片](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpzhiaXUhn9W2XjuqeziaG1ibdvaOPHe2KysUlTCphhnkoaacAho6ZFv3F4vaetoGu4dUQcvPn4wicvGwA/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+
+
+
 #### 4.ThreadLocal
 
+用作数据隔离，保证本线程的数据不会被其他线程篡改
+
+**1.用案例**： 
+
+1.TransactionSynchronizationManager
+
+![image-20210401165349362](https://gitee.com/lifutian66/img/raw/master/img/image-20210401165349362.png)
+
+2.Spring的事务主要是ThreadLocal和AOP去 , 每个线程自己的链接是靠ThreadLocal保存的
+
+3.SimpleDataFormat.parse(), 内部有一个Calendar对象，调用SimpleDataFormat的parse()方法会先调用Calendar.clear（），然后调用Calendar.add(),多线程环境会有问题，可以使用ThreadLocal 减少 SimpleDataFormat 的数量
+
+4.多场景的cookie，session等数据隔离都是通过ThreadLocal
+
+**2.原理**
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-01_17-21-27.png)
+
+
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-01_17-22-00.png)
+
+看出：get() 方法,从当前线程的threadLocals属性 取出值
+
+set  同理 
+
+threadLocals 属性的类型 是 ThreadLocalMap，里面有   Entry[] table 
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-01_17-30-11.png)
+
+entry 中的 key 是Threadlocal   value就是存取的值
+
+为什么需要数组呢？ 因为一个线程可以有 多个 Threadlocal  
+
+原理：
+
+​	set 方法中
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-01_18-10-54.png)
+
+ 	共享线程的ThreadLocal数据怎么办？
+
+​	使用 InheritableThreadLocal类，父子线程值传递
+
+​	原理：
+
+​	在Thread的构造函数中，我们可以看到 其实是调用了 init() 方法，此方法中，如下图
+
+​	![image-20210402093012432](https://gitee.com/lifutian66/img/raw/master/img/image-20210402093012432.png)
+
+如果父线程中的 inheritableThreadLocals不为空，并且inheritThreadLocals 标识为 true，会将父线程的inheritableThreadLocals 往下传递
+
+
+
+**问题：**
+
+ThreadLocalMap 中的存值的 entry key 是Threadlocal  弱引用的，会导致 内存泄露
+
+即：ThreadLocal在没有外部强引用时 GC时被回收，如果创建ThreadLocal的线程一直持续运行，那么这个Entry对象中的value就有可能一直得不到回收，
+
+发生内存泄露（线程池）
+
+ **解决:**
+
+使用完 ThreadLocal remove 其实在源码 （get set 都会处理被回收的引用）
+
+ **为什么ThreadLocalMap的key要设计成弱引用？**
+
+![1](https://gitee.com/lifutian66/img/raw/master/img/1.jpg)
+
+ 当前线程的属性ThreadLocalMap key弱引用，是为了 当 Threadlocal不被强引用的时 发生gc 回收即可，否则 key强引用，一直会被ThreadLocalMap 强引用
+
+ 导致ThreadLocal  不会被回收，导致key也发生内存泄漏 
+
+
+
 #### 5.Synchronized
+
+**有序性、可见性、原子性**
+
+1.有序性  as-if-serial
+
+2.可见性  缓存一致性 协议
+
+3.原子性 确保同一时间只有一个线程能拿到锁
+
+ **底层实现**
+
+代码：
+
+```java
+public class Synchronized {
+    public synchronized void husband() {
+        synchronized (new Synchronized()) {
+
+        }
+    }
+}
+```
+
+在其编译的.class 文件执行
+
+```txt
+javap -p -v -c  Synchronized.class
+```
+
+看到执行的结果：
+
+```
+Classfile /D:/study/java8/target/classes/com/example/java8/inter/Synchronized.class
+  Last modified 2021-4-2; size 499 bytes
+  MD5 checksum b6a4702ac06de7cf1f0f1cf2039e8b52
+  Compiled from "Synchronized.java"
+public class com.example.java8.inter.Synchronized
+  minor version: 0
+  major version: 52
+  flags: ACC_PUBLIC, ACC_SUPER
+Constant pool:
+   #1 = Methodref          #4.#19         // java/lang/Object."<init>":()V
+   #2 = Class              #20            // com/example/java8/inter/Synchronized
+   #3 = Methodref          #2.#19         // com/example/java8/inter/Synchronized."<init>":()V
+   #4 = Class              #21            // java/lang/Object
+   #5 = Utf8               <init>
+   #6 = Utf8               ()V
+   #7 = Utf8               Code
+   #8 = Utf8               LineNumberTable
+   #9 = Utf8               LocalVariableTable
+  #10 = Utf8               this
+  #11 = Utf8               Lcom/example/java8/inter/Synchronized;
+  #12 = Utf8               husband
+  #13 = Utf8               StackMapTable
+  #14 = Class              #20            // com/example/java8/inter/Synchronized
+  #15 = Class              #21            // java/lang/Object
+  #16 = Class              #22            // java/lang/Throwable
+  #17 = Utf8               SourceFile
+  #18 = Utf8               Synchronized.java
+  #19 = NameAndType        #5:#6          // "<init>":()V
+  #20 = Utf8               com/example/java8/inter/Synchronized
+  #21 = Utf8               java/lang/Object
+  #22 = Utf8               java/lang/Throwable
+{
+  public com.example.java8.inter.Synchronized();
+    descriptor: ()V
+    flags: ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+      LineNumberTable:
+        line 7: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       5     0  this   Lcom/example/java8/inter/Synchronized;
+
+  public synchronized void husband(); 
+    descriptor: ()V
+    flags: ACC_PUBLIC, ACC_SYNCHRONIZED // 这里看到同步方法 标识 是 ACC_SYNCHRONIZED
+    Code:
+      stack=2, locals=3, args_size=1
+         0: new           #2                  // class com/example/java8/inter/Synchronized
+         3: dup
+         4: invokespecial #3                  // Method "<init>":()V
+         7: dup
+         8: astore_1
+         9: monitorenter					//同步代码进入
+        10: aload_1
+        11: monitorexit  					//同步代码出来
+        12: goto          20
+        15: astore_2
+        16: aload_1
+        17: monitorexit						//同步代码出来
+        18: aload_2
+        19: athrow
+        20: return
+      Exception table:
+         from    to  target type
+            10    12    15   any
+            15    18    15   any
+      LineNumberTable:
+        line 9: 0
+        line 11: 10
+        line 12: 20
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      21     0  this   Lcom/example/java8/inter/Synchronized;
+      StackMapTable: number_of_entries = 2
+        frame_type = 255 /* full_frame */
+          offset_delta = 15
+          locals = [ class com/example/java8/inter/Synchronized, class java/lang/Object ]
+          stack = [ class java/lang/Throwable ]
+        frame_type = 250 /* chop */
+          offset_delta = 4
+}
+SourceFile: "Synchronized.java"
+
+```
+
+同步方法标识 **ACC_SYNCHRONIZED** 之后隐式调动 monitorenter和monitorexit  指令
+
+同步代码 就是 monitorenter 进入 monitorexit  退出
+
+
+
+1.6之前是重量级锁，是ObjectMonitor调用的过程，以及Linux内核的复杂运行机制决定的，大量的系统资源消耗，所以效率才低
+
+之后对锁做了优化
+
+
 
 #### 6.AQS
 
