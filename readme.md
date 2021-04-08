@@ -655,11 +655,156 @@ SourceFile: "Synchronized.java"
 
 AbstractQueuedSynchronizer
 
-抽象队列同步器
+**抽象 队列  同步器**
 
 ReentrantLock、ReentrantReadWriteLock、CountDownLatch、Semaphore等都是基于AQS 实现
 
+如图：
 
+![Snipaste_2021-04-06_14-01-29](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-06_14-01-29.png)
+
+ReentrantLock、ReentrantReadWriteLock、Semaphore 均有公平锁和非公平锁实现
+
+CountDownLatch 只有非公平锁实现
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-06_14-12-13.png)
+
+其实公平锁与非公平锁 区别 ：是否根据请求共享资源先后顺序为依据，获取共享资源
+
+**设计模式**是**模板模式** 
+
+##### 1.**核心数据结构**：
+
+**双向链表 + state(锁状态)**
+
+![222324](https://gitee.com/lifutian66/img/raw/master/img/222324.png)
+
+其每个线程都会封装成Node
+
+具体实现：
+
+ ![Snipaste_2021-04-06_18-22-33](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-06_18-22-33.png)
+
+**排他锁(exclusive)**  只有一个线程可以访问共享变量    **重入锁**
+
+**共享锁(shared)**  允许多个线程同时访问   **信号量**
+
+关于 **waitStatus** 
+
+CANCELLED：表示线程取消    
+
+SIGNAL：表示后续节点需要被唤醒   
+
+CONDITION：线程等待在条件变量队列中
+
+PROPAGATE:  在共享模式下，无条件传播releaseShared状态
+
+**重入锁  当有多条件时，内部维护 多条件等待队列**
+
+![](https://gitee.com/lifutian66/img/raw/master/img/saada.png)
+
+条件等待队列数据结构就是  **ConditionObject**，其内部依然是 **Node** ， firstWaiter，lastWaiter 组成链表
+
+**底层操作：CAS**
+
+##### **2.方法**：
+
+###### 1.获取锁（许可）
+
+1. 独占锁
+
+**acquire**
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_10-55-51.png)
+
+tryAcquire()函数是个未实现的方法，需要自己实现
+
+addWaiter 添加到队列
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_11-03-00.png)
+
+addWaiter 返回 node 对象
+
+acquireQueued 方法
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_11-18-28.png)
+
+打断返回 true，执行   selfInterrupt方法  就是  Thread.currentThread().interrupt() 
+
+**acquireInterruptibly**
+
+![image-20210407112347132](https://gitee.com/lifutian66/img/raw/master/img/image-20210407112347132.png)
+
+**tryAcquireNanos**  增加了最长等待 时间
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_13-46-09.png)
+
+2. 共享锁
+
+**acquireShared**
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_14-06-29.png)
+
+tryAcquireShared 未实现，模板方法等待实现
+
+**acquireSharedInterruptibly**
+
+![image-20210407140840145](https://gitee.com/lifutian66/img/raw/master/img/image-20210407140840145.png)
+
+增加了线程是否被打断的判断，之后的代码类似上面的**acquireShared** 
+
+**tryAcquireSharedNanos** 增加了最长等待时间
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_14-10-44.png)
+
+在 **acquireShared** 方法基础上增加了 最长等待时间 判断
+
+###### 2.释放锁（许可）
+
+独占锁 
+
+release
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-08_16-45-04.png)
+
+tryRelease 方法是个模板方法 待实现，unparkSuccessor 方法 唤醒下一个线程
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-07_14-24-17.png)
+
+先查看下一个节点 是不是可以激活的，如果不是，查找下个可唤醒线程是从尾 到 头 查找
+
+原因：
+
+```java
+private Node enq(final Node node) {
+        for (;;) {
+            Node t = tail;
+            if (t == null) { // Must initialize
+                if (compareAndSetHead(new Node()))
+                    tail = head;
+            } else {
+                //看这里
+                node.prev = t;
+                if (compareAndSetTail(t, node)) {
+                    t.next = node;
+                    return t;
+                }
+            }
+        }
+}
+```
+
+新节点pre指向tail，tail指向新节点，这里后继指向前驱的指针是由CAS操作保证线程安全的。
+
+而cas操作之后t.next=node之前，可能会有其他线程进来。所以出现了问题，从尾部向前遍历是一定能遍历到所有的节点
+
+
+
+releaseShared
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-08_17-15-02.png)
+
+tryAcquireShared 是个模板方法 待实现
 
 ### 3.tcp/http
 
