@@ -806,9 +806,57 @@ releaseShared
 
 tryAcquireShared 是个模板方法 待实现
 
+###### 3.ReentrantLock
+
+有公平锁和非公平锁
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-09_17-38-43.png)
+
+​	其区别就是 hasQueuedPredecessors（） 这个方法其实就是查看 是否有等待更久的线程 
+
+​	其Condition  源自 AbstractQueuedSynchronizer  ConditionObject
+
+​	ConditionObject# await  其实就是将其添加到等待队列    
+
+​	ConditionObject# signal  唤醒 firstWaiter  不是null 的
+
+​	ConditionObject# signalAll  重复 signal   全部唤醒
+
+###### 4.ReentrantReadWriteLock
+
+公平锁和非公平锁 区别 writerShouldBlock /readerShouldBlock 返回  hasQueuedPredecessors/false	
+
+ReadLock/WriteLock 分别调用  acquireShared/acquire 获取锁  释放锁同理
+
+###### 5.CountDownLatch
+
+ 其实现了  AbstractQueuedSynchronizer 的  tryAcquireShared /tryReleaseShared 
+
+###### 6.Semaphore
+
+公平锁和非公平锁 区别 tryAcquire/tryAcquireShared 获取锁
+
 ### 3.tcp/http
 
 #### 1.io
+
+同步阻塞io： 没资源时挂起 不能马上返回，等待资源可用
+
+![](https://gitee.com/lifutian66/img/raw/master/img/sksk.png)
+
+阻塞等待浪费资源，不适合并发
+
+解决：**1.IO复用的模型**
+
+​				多个连接共享一个阻塞对象,应用程序只会在一个阻塞对象上等待,当某个连接有新的数据处理，操作系统直接**通知**应用程序，
+
+​				线程从阻塞状态返回并开始业务处理
+
+​			**2.线程池复用的方式**
+
+​				将连接完成后的业务处理任务分配给线程，一个线程处理多个连接的业务。IO复用结合线程池的方案即Reactor模式。
+
+​				
 
 #### 2.tcp/ip
 
