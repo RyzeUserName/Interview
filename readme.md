@@ -856,13 +856,85 @@ ReadLock/WriteLock 分别调用  acquireShared/acquire 获取锁  释放锁同�
 
 ​				将连接完成后的业务处理任务分配给线程，一个线程处理多个连接的业务。IO复用结合线程池的方案即Reactor模式。
 
-​				
+​				基于事件驱动的 处理模型，将处理变成对应的事件
+
+​								![](https://gitee.com/lifutian66/img/raw/master/img/1111111.png)
+
+​			通常网络处理：
+
+![11111112](https://gitee.com/lifutian66/img/raw/master/img/11111112.png)
 
 #### 2.tcp/ip
+
+TCP 即 Transmission Control Protocol，可以看到是一个传输控制协议，重点就在这个**控制**。
+
+控制可靠、按序地传输以及端与端之间的流量控制
+
+**tcp面向连接**，**所谓的连接其实只是双方都维护了一个状态，通过每一次通信来维护状态的变更**，使得看起来好像有一条线关联了对方。
+
+tcp协议头 有：
+
+Seq 就是 Sequence Number 即序号，它是用来解决乱序问题的。
+
+ACK 就是 Acknowledgement Numer 即确认号，它是用来解决丢包情况的，告诉发送方这个包我收到啦
+
+##### **1.三次握手**
+
+​		握手就是为了初始化双方seq序号
+
+​		![](https://gitee.com/lifutian66/img/raw/master/img/12.png)
+
+ SYN 全称  Synchronize Sequence Numbers，这个序号是用来保证之后传输数据的顺序性
+
+ SYN +ACK 保证了 顺序和数据丢失
+
+ SYN超时之后 阶梯性重试 1s  2s 4s 8s 16s 32s 之后便断开连接（SYN攻击 ：减少重试次数 、开启tcp_syncookies、减少重试的次数、增加 SYN 队列数 ）
+
+**握手的重点就是同步初始序列号**，这种情况也完成了同步的目标
+
+##### **2.四次挥手**
+
+为什么挥手需要四次？**因为 TCP 是全双工协议**，也就是说双方都要关闭，每一方都向对方发送 FIN 和回应 ACK。
+
+![](https://gitee.com/lifutian66/img/raw/master/img/13.png)
+
+​	TIME_WAIT 是会等待 2MSL （Maximum Segment Lifetime 即报文最长生存时间）
+
+​		原因：1.怕被动关闭方没有收到最后的 ACK
+
+​					2.可能会重连 需要时间处理残留数据 
+
+​		产生问题：
+
+​				 资源占用 端口占用
+
+​		解决：
+
+​				**服务端不要主动关闭，把主动关闭方放到客户端**
+
+​	**超时重试**：事件驱动，网络不稳定的如果传输的包对方没收到, 那么就必须重传，回复ack **只能回复确认最大连续收到包**，发送方需要等待
+
+​						那么等待多长时间？ 基于来回时间  统计计算出 
+
+​	**快速重传**：数据驱动的重传, 如果网络状况好的时候，只是恰巧丢包了，那等这么长时间就没必要(连续收到三次相同 ACK 证明当前网络状况是 ok 的)
+
+​	**滑动窗口**:   控制传送速率
+
+​	**拥塞控制**：网络差，没收到ack 无脑重传 只会加剧 网络 阻塞
+
+​	1、慢启动，探探路。2、拥塞避免，感觉差不多了减速看看 3、拥塞发生快速重传/恢复
+
+分层：
+
+![](https://gitee.com/lifutian66/img/raw/master/img/15.png)
 
 #### 3.linux 命令
 
 #### 4.http
+
+​	HyperText Transfer Protocol   超文本传输协议
+
+​	
 
 #### 5.https
 
