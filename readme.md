@@ -934,7 +934,11 @@ ACK 就是 Acknowledgement Numer 即确认号，它是用来解决丢包情况�
 
 ​	HyperText Transfer Protocol   超文本传输协议
 
-​	
+​	**HTTP的特点**： 无状态 、无连接
+
+​	**HTTP/1.0版的主要缺点**：每个TCP连接只能发送一个请求，发送数据完毕后，连接就关闭了，如果还要请求就必须要新建一个请求连接
+
+​	HTTP1.1虽然是无状态协议，但是为了实现期望的保持状态功能，于是引入了Cookie技术，有了Cookie，和HTTP协议通信，就可以管理状态了。
 
 #### 5.https
 
