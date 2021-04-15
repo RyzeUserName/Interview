@@ -940,9 +940,235 @@ ACK 就是 Acknowledgement Numer 即确认号，它是用来解决丢包情况�
 
 ​	HTTP1.1虽然是无状态协议，但是为了实现期望的保持状态功能，于是引入了Cookie技术，有了Cookie，和HTTP协议通信，就可以管理状态了。
 
+​	HTTP或者HTTPS协议请求的资源由 统一资源标识符（Uniform Resource Identifiers，URI）来标识
+
+​	**HTTP状态码**（HTTP Status Code）是用以表示网页服务器HTTP响应状态的3位数字代码，**HTTP状态码是服务器端返回给客户端的**
+
+​	200 成功	
+
+​	202 服务器已经接受请求，但尚未处理
+
+​	204 服务器成功处理了请求，但不需要返回如何实体内容。
+
+​	301 永久性的重定向
+
+​	302 临时跳转
+
+​	304 被请求的资源内容没有发生更改
+
+​	400 客户端请求的语法错误，服务器无法理解
+
+​	401 请求要求用户的身份认证
+
+​	403 为服务器已经接收请求，但是被拒绝执行
+
+​	404 所请求的资源无法找到 
+
+​	500 为服务器内部错误，无法处理请求
+
+​	502 作为网关或者代理工作的服务器尝试执行请求时，从远程服务器接收到了一个无效的响应
+
 #### 5.https
 
+​	HTTP 有着一个致命的缺陷，内容是**明文传输**
+
+​	HyperText Transfer Protocol Secure  超文本传输安全协议，数据通信仍然是HTTP，但利用**SSL/TLS加密数据包**。
+
+​	**过程：**
+
+1. 用户在浏览器发起HTTPS请求，默认使用服务端的443端口进行连接
+
+ 	2. 服务端在使用HTTPS前，去经过认证的CA机构申请颁发一份**数字证书**，数字证书里包含有证书持有者、证书有效期、公钥等信息，证书内会附带一个**公钥Pub**，而与之对应的**私钥Private**保留在服务端不公开；
+ 	3. 服务端收到请求，返回配置好的包含**公钥Pub**的证书给客户端；
+ 	4. 客户端收到**证书**，校验合法性，主要包括是否在有效期内、证书的域名与请求的域名是否匹配，上一级证书是否有效（递归判断，直到判断到系统内置或浏览器配置好的根证书），如果不通过，则显示HTTPS警告信息，如果通过则继续；
+ 	5. 客户端生成一个用于对称加密的**随机Key**，并用证书内的**公钥Pub**进行加密，发送给服务端；
+ 	6. 服务端收到**随机Key**的密文，使用与**公钥Pub**配对的**私钥Private**进行解密，得到客户端真正想发送的**随机Key**；
+ 	7. 服务端使用客户端发送过来的**随机Key**对要传输的HTTP数据进行对称加密，将密文返回客户端；
+ 	8. 客户端使用**随机Key**对称解密密文，得到HTTP数据明文；
+ 	9. 后续HTTPS请求使用之前交换好的**随机Key**进行对称加解密。
+
 #### 6.netty
+
+​	同步和异步关注的是**消息通信机制**   同步不返回就等待，异步在发出调用之后，这个调用就直接返回了，没有返回结果
+
+​	阻塞和非阻塞关注的是**程序在等待调用结果时的状态.**  阻塞当前线程会被挂起，非阻塞不会阻塞当前线程
+
+​	**BIO**是一个同步并阻塞的IO模式，**传统的  java.io 包**，它基于流模型实现，提供了我们最熟知的一些 IO 功能
+
+​	面向流的，一位置每次从流中读取字节，直至读取完全部字节，他们没有缓存在任何地方，因此是不能前后移动流中数据，需要移动或者操作的话需要将其缓存	到缓冲区。
+
+​	**NIO** 是一种同步非阻塞的 I/O 模型 ，支持面向缓冲的，基于通道的 I/O 操作方法
+
+​	面向缓冲区的，数据读取到一个稍后处理的缓冲区，当然可以前后移动或者操作缓冲区数据。
+
+##### 1.Netty 为什么采用NIO？
+
+​	1.Netty不看重Windows上的使用，在Linux系统上，AIO的底层实现仍使用EPOLL，没有很好实现AIO，因此在性能上没有明显的优势，而且被JDK封装了一层不		容易深度优化
+
+​	2.Netty整体架构是reactor模型, 而AIO是proactor模型, 混合在一起会非常混乱,把AIO也改造成reactor模型看起来是把epoll绕个弯又绕回来
+
+​	3.AIO还有个缺点是接收数据需要预先分配缓存, 而不是NIO那种需要接收时才需要分配缓存, 所以对连接数量非常大但流量小的情况, 内存浪费很多
+
+​	4.Linux上AIO不够成熟，处理回调结果速度跟不到处理需求，比如外卖员太少，顾客太多，供不应求，造成处理速度有瓶颈（待验证）
+
+##### 2.代码
+
+​	Server 代码
+
+```java
+ public static void main(String[] args) throws InterruptedException {
+        NioEventLoopGroup parent = new NioEventLoopGroup();
+        NioEventLoopGroup children = new NioEventLoopGroup();
+        try {
+            ServerBootstrap serverBootstrap = new ServerBootstrap()
+                .group(parent, children)
+                .channel(NioServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel ch) throws Exception {
+                        ChannelPipeline pipeline = ch.pipeline();
+                        pipeline.addLast(new StringDecoder());
+                        pipeline.addLast(new StringEncoder());
+                        pipeline.addLast(new SomeSocketServerHandler());
+
+                    }
+                });
+            ChannelFuture future = serverBootstrap.bind(9999).sync();
+            System.out.println("服务器已启动。。。");
+            future.channel().closeFuture().sync();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            parent.shutdownGracefully();
+            children.shutdownGracefully();
+        }
+    }
+
+    private static class SomeSocketServerHandler extends ChannelInboundHandlerAdapter {
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            System.out.println("客户端地址 ====== " + ctx.channel().remoteAddress());
+            System.out.println("收到客户端 ====== " + msg);
+            ctx.channel().writeAndFlush("服务端回复：" + UUID.randomUUID());
+            ctx.fireChannelActive();
+            TimeUnit.MILLISECONDS.sleep(500);
+        }
+    }
+```
+
+Client 代码：
+
+```java
+ public static void main(String[] args) throws InterruptedException {
+        NioEventLoopGroup work = new NioEventLoopGroup();
+        try {
+            Bootstrap bootstrap = new Bootstrap()
+                .group(work)
+                .channel(NioSocketChannel.class)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel ch) throws Exception {
+                        ChannelPipeline pipeline = ch.pipeline();
+                        pipeline.addLast(new StringDecoder());
+                        pipeline.addLast(new StringEncoder());
+                        pipeline.addLast(new SomeSocketServerHandler());
+
+                    }
+                });
+            ChannelFuture future = bootstrap.connect("localhost", 9999).sync();
+            System.out.println("客户端已启动。。。");
+            future.channel().closeFuture().sync();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (work != null) {
+                work.shutdownGracefully();
+            }
+        }
+    }
+
+    private static class SomeSocketServerHandler extends ChannelInboundHandlerAdapter {
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            System.out.println("收到了" + msg);
+            ctx.channel().writeAndFlush("客户端 写出 : " + System.currentTimeMillis());
+            TimeUnit.MILLISECONDS.sleep(500);
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) {
+            ctx.channel().writeAndFlush("客户端开始 对话");
+        }
+    }
+```
+
+##### 3.**Netty 核心组件**
+
+​	Channel   类似 连接socket 
+
+​	EventLoop 相当于线程池  一个Channel 绑定一个  但是一个EventLoop 可能会分配给一个或多个Channel
+
+​	ChannelHandler    事件就是 网络事件的出入站、用户自定义的事件等，而ChannelHandler 则是对应具体事件的处理
+
+​	ChannelPipeline 管道 与channel 永久性的分配 1:1 
+
+​	ChannelFuture  异步操作结果的占位符，它在未来的某个时刻完成，并提供对其结果的访问 基于ChannelFutureListener 即监听器
+
+​	ByteBuf  堆缓冲区  （ 堆缓冲区 、直接缓冲区 、复合缓冲区）
+
+##### 4.详细介绍
+
+###### 1.EventLoop **NioEventLoopGroup** 
+
+代码继承如图：
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-21-44.png)
+
+EventLoop 继承自SingleThreadEventLoo 间接继承 ExecutorService 是 单线程的 线程池
+
+NioEventLoopGroup 继承自 MultithreadEventLoopGroup 间接继承 ExecutorService   是 多线程的 线程池
+
+Executor  必然拥有一个 `execute(Runnable command)` 的实现方法
+
+ NioEventLoop 的 `execute()` 实现方法在其父类  SingleThreadEventExecutor 中
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-36-12.png)
+
+其内部调用 `startThread()`方法，启动线程
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-36-32.png)
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-37-37.png)
+
+最终调用的是 内部实例属性 Executor 的 `execute（）`方法
+
+也就是说：
+
+1. NioEventLoop 本身就是一个 Executor。
+2. NioEventLoop 内部封装这一个新的线程 Executor 成员。
+3. NioEventLoop 有两个 `execute` 方法，除了本身的 `execute()` 方法对应的还有成员属性 Executor  对应的 `execute()` 方法。
+
+而  EventExecutorGroup的 `execute()` 实现方法在其父类的父类   AbstractEventExecutorGroup 中
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-47-30.png)
+
+最终调用的是 内部实例属性 Executor 的 `execute（）`方法
+
+也就是说：
+
+1. NioEventLoopGroup 是一个线程池线程 Executor。
+
+2. NioEventLoopGroup 也封装了一个线程 Executor。
+
+3. NioEventLoopGroup 也有两个 `execute()`方法。
+
+**NioEventLoopGroup 初始化**
+
+最终调用
+
+   ![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_18-27-051.png)
+
+
 
 ### 4.jvm
 
