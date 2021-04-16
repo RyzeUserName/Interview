@@ -1130,7 +1130,7 @@ NioEventLoopGroup 继承自 MultithreadEventLoopGroup 间接继承 ExecutorServi
 
 Executor  必然拥有一个 `execute(Runnable command)` 的实现方法
 
- NioEventLoop 的 `execute()` 实现方法在其父类  SingleThreadEventExecutor 中
+NioEventLoop 的 `execute()` 实现方法在其父类  SingleThreadEventExecutor 中
 
 ![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-36-12.png)
 
@@ -1140,7 +1140,7 @@ Executor  必然拥有一个 `execute(Runnable command)` 的实现方法
 
 ![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_17-37-37.png)
 
-最终调用的是 内部实例属性 Executor 的 `execute（）`方法
+最终调用的是 SingleThreadEventLoo  内部实例属性 Executor 的 `execute（）`方法
 
 也就是说：
 
@@ -1168,7 +1168,13 @@ Executor  必然拥有一个 `execute(Runnable command)` 的实现方法
 
    ![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-15_18-27-051.png)
 
+数组 children （类型 NioEventLoop） 循环调用 `newChild()`方法 初始化
 
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-16_09-47-13.png)
+
+具体代码：
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-16_17-27-38.png)
 
 ### 4.jvm
 
