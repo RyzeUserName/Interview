@@ -398,6 +398,20 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 
 Volatile 的实现 是依靠 处理器访问缓存遵循一些一致性协议（MSI、MESI、MOSI、Synapse、Firefly及DragonProtocol等）
 
+MESI（M修改 E独享 S共享 I 无效） 嗅探机制
+
+1.变量被①线程 读取 ①线程变量状态E 
+
+2.变量被②线程 读取 ②线程变量状态S ①线程也变成S
+
+3.①线程修改变量 状态变为M ②变为 I
+
+4.①线程变量写回主内存，主内存同步变量给②线程 都变成S
+
+I到 S 会有时间差， 频繁操作导致可见性的结果并不一定准确 
+
+
+
 ②禁止指令重排序
 
 为了提高性能，编译器和处理器常常会对既定的代码执行顺序进行指令重排序。
@@ -414,7 +428,7 @@ Volatile 的实现 是依靠 处理器访问缓存遵循一些一致性协议（
 
 ![图片](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpzhiaXUhn9W2XjuqeziaG1ibdvaOPHe2KysUlTCphhnkoaacAho6ZFv3F4vaetoGu4dUQcvPn4wicvGwA/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
 
-
+Volatile 只能保证可见性，有序性， 不能保证原子性
 
 #### 4.ThreadLocal
 
@@ -1175,6 +1189,20 @@ NioEventLoop 的 `execute()` 实现方法在其父类  SingleThreadEventExecutor
 具体代码：
 
 ![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-04-16_17-27-38.png)
+
+ 也就是 NioEvnetLoopGroup  其实就是个线程池，内部NioEventLoop 的数组，每个线程执行时 调用 总executor 最终完成线程调用
+
+###### 2.Bootstrap  ServerBootstrap 
+
+继承体系
+
+![image-20210420151304429](https://gitee.com/lifutian66/img/raw/master/img/image-20210420151304429.png)
+
+ServerBootstrap 服务器的启动配置类
+
+Bootstrap 客户端的启动配置类
+
+###### 3.
 
 ### 4.jvm
 
