@@ -852,7 +852,199 @@ ReadLock/WriteLock 分别调用  acquireShared/acquire 获取锁  释放锁同�
 
 ### 3.tcp/http
 
+计算机基础：
+
+![img](https://gitee.com/lifutian66/img/raw/master/img/091053xho6f2omicyomohn.jpg)
+
+计算机组成：CPU，内存，网络接口等
+
+网卡接收数据的过程： 
+
+​	1.网卡接收到网线传来的数据
+
+​	2.**网卡向cpu发出一个中断信号，操作系统便能得知有新数据到来**，再通过网卡**中断程序**去处理数据
+
+​	3.网络数据写入到对应socket的接收缓冲区里面
+
+​	4.唤醒对应的线程
+
+操作系统如何知道网络数据对应于哪个socket？
+
+socket对应着端口号，而网络数据包中包含了ip和端口的信息
+
+如何同时监视多个socket的数据？
+
+**多路复用**，也就是 select poll  epoll
+
+
+
 #### 1.io
+
+io：输入输出
+
+![img](https://gitee.com/lifutian66/img/raw/master/img/215778a93e00c1e250154d3acd83309c.webp)
+
+
+
+**硬 件 层（Hardware）**：包括和我们熟知的和IO相关的CPU、内存、磁盘和网卡几个硬件；
+
+**内核空间（Kernel Space）** ：计算机一部分核心软件独立于普通应用程序，运行在较高的特权级别上，它们驻留在被保护的内存空间上，拥有访问硬件设备的所有权限，Linux将此称为内核空间
+
+**用户空间 （**User Space**）**：用户空间中的代码运行在较低的特权级别上，只能看到允许它们使用的部分系统资源，并且不能使用某些特定的系统功能，也不能直接访问内核空间和硬件设备，以及其他一些具体的使用限制。
+
+**用户操作底层？**
+
+操作系统在内核开辟了一块唯一且合法的**系统调用** System Call Interface( 可供用户调用的底层硬件的API)，不用进程就可以调用api，内核在调用底层硬件，用户态到内核态切换     比如：内存映射mmap()、文件操作类的open()、IO读写read()、write()等等。
+
+1.BIO
+
+阻塞IO，io操作会阻塞 
+
+缺点：**阻塞** 
+
+优点:**阻塞是不会消耗CPU资源** 
+
+2.BIO + 线程池
+
+多线程处理  
+
+缺点：依赖线程，线程占用资源，线程上线文切换成本较高    
+
+优点：处理少量并发
+
+3.NIO非阻塞模型
+
+通过单线程或者少量线程达到处理大量客户端请求的目的，“非阻塞”可以理解成系统调用API级别的，而真正底层的IO操作都是阻塞的
+
+Accept官方文档对其非阻塞部分的描述，"**flags**"参数设成"**SOCK_NONBLOCK**"就可以达到非阻塞的目的，非阻塞之后线程会一直处理轮询调用，这时候可以通过每次返回特殊的异常码“**EAGAIN**”或"**EWOULDBLOCK**"告诉主程序还没有连接到达可以继续轮询
+
+大致意思：**用户进程需要不断去主动询问内核数据准备好了没有！**
+
+优点：api级非阻塞编程
+
+缺点：用户进程不断切换到内核态，对连接状态或读写数据做轮询
+
+4.IO多路复用模型
+
+频繁的调用系统函数，一次性把数据传递过去就省去了频繁的系统间调用，只不过入参这个“集合”需要你注册/填写感兴趣的事件，读fd、写fd或者连接状态的fd等，然后交给内核帮你进行处理。几个系统调用 **- select()、poll()、epoll()**
+
+**select()**
+
+```
+/**
+ ``* select()系统调用
+ ``*
+ ``* 参数列表：
+ ``*   nfds    - 值为最大的文件描述符+1
+ ``*  *readfds  - 用户检查可读性
+ ``*  *writefds  - 用户检查可写性
+ ``*  *exceptfds - 用于检查外带数据
+ ``*  *timeout  - 超时时间的结构体指针
+ ``*/
+int` `select（``int` `nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout）;
+```
+
+内核使用**select()**为用户进程提供了类似批量的接口，函数本身也会一直阻塞直到有fd为就绪状态返回
+
+readfds 是全部读事件的集合，writefds是全部写事件的集合
+
+![img](https://gitee.com/lifutian66/img/raw/master/img/42b1483530de04358157e1f2083d7862.webp)
+
+缺点：
+
+- 复杂度O(n)，轮询的任务交给了内核来做，复杂度并没有变化，数据取出后也需要轮询哪个fd上发生了变动；
+- 用户态还是需要不断切换到内核态，直到所有的fds数据读取结束，整体开销依然很大；
+- fd_set有大小的限制，目前被硬编码成了**1024**；
+- fd_set不可重用，每次操作完都必须重置；
+
+**poll()**
+
+```
+/**
+ ``* poll()系统调用
+ ``*
+ ``* 参数列表：
+ ``*  *fds     - pollfd结构体
+ ``*   nfds    - 要监视的描述符的数量
+ ``*   timeout   - 等待时间
+ ``*/
+int` `poll（struct pollfd *fds, nfds_t nfds, ``int` `*timeout）;
+ 
+ 
+### pollfd的结构体
+struct pollfd{
+　``int` `fd；``// 文件描述符
+　``short` `event；``// 请求的事件
+　``short` `revent；``// 返回的事件
+}
+```
+
+**poll()**和**select()**是非常相似的，唯一的区别在于**poll()**摒弃掉了位图算法，使用自定义的pollfd 结果体，并通过event变量注册感兴趣的可读可写事件（**POLLIN、POLLOUT**），最后把 **pollfd** 交给内核。当有读写事件触发的时候，我们可以通过轮询 **pollfd**，判断revent确定该fd是否发生了可读可写事件。
+
+![](https://gitee.com/lifutian66/img/raw/master/img/289b491c76209266080a21a2d47e8705.webp)
+
+优点：没有了位图算法的1024大小限制
+
+缺点：依然解决不了用户态切换内核态切换以及O(n)复杂度问题
+
+**epoll()**  
+
+```
+/**
+ * 返回专用的文件描述符
+ */
+int epoll_create（int size）;
+/**
+ ``* epoll_ctl()系统调用
+ ``*
+ ``* 参数列表：
+ ``*   epfd    - 由epoll_create()返回的epoll专用的文件描述符
+ ``*   op     - 要进行的操作例如注册事件,可能的取值:注册-EPOLL_CTL_ADD、修改-EPOLL_CTL_MOD、删除-EPOLL_CTL_DEL
+ ``*   fd     - 关联的文件描述符
+ ``*   event   - 指向epoll_event的指针
+ ``*/
+int` `epoll_ctl（``int` `epfd, ``int` `op, ``int` `fd , struce epoll_event *event ）;
+/**
+ * epoll_wait()返回n个可读可写的fds
+ *
+ * 参数列表：
+ *     epfd           - 由epoll_create()返回的epoll专用的文件描述符
+ *     epoll_event    - 要进行的操作例如注册事件,可能的取值:注册-EPOLL_CTL_ADD、修改-EPOLL_CTL_MOD、删除-EPOLL_CTL_DEL
+ *     maxevents      - 每次能处理的事件数
+ *     timeout        - 等待I/O事件发生的超时值；-1相当于阻塞，0相当于非阻塞。一般用-1即可
+ */
+int epoll_wait（int epfd, struce epoll_event *event , int maxevents, int timeout）;
+```
+
+Nginx、Redis都广泛地使用了此种模式, 将维护等待队列 和 阻塞进程 步骤分开，效率就能得到提升。
+
+epoll 采用三步走
+
+​	1.epoll_create  用户进程通过 通过该函数在内核空间里面创建了一块空间，并返回描述此空间的fd
+
+​	2.epoll_ctl 通过自定义 epoll_event结构体在fd 注册感兴趣的事件
+
+​	3.epoll_wait 一直阻塞等待，直到硬盘、网卡等硬件设备数据准备完成后发起**硬中断**，中断CPU，CPU会立即执行数据拷贝工作，数据从磁盘缓冲传输到内核缓
+
+​		冲，同时将准备完成的fd放到就绪队列中供用户态进行读取。用户态阻塞停止，接收到**具体数量**的可读写的fds，返回用户态进行数据处理
+
+整体：
+
+![](https://gitee.com/lifutian66/img/raw/master/img/af4673f2b7b255319bfdf11b57391d7d.webp)
+
+优点：没有频繁的用户态到内核态的切换，O(1)复杂度，返回的"nfds"是一个确定的可读写的数量
+
+缺点：独立创建单独空间
+
+
+
+
+
+
+
+
+
+流：代表任何有能力产出数据的数据源对象或者是有能力接受数据的接收端对象
 
 同步阻塞io： 没资源时挂起 不能马上返回，等待资源可用
 
@@ -1203,6 +1395,24 @@ ServerBootstrap 服务器的启动配置类
 Bootstrap 客户端的启动配置类
 
 ###### 3.
+
+4.
+
+Reactor模式：主动，能收了你跟俺说一声。
+
+使用同步IO，即业务线程处理数据需要主动等待或询问，主要特点是利用epoll监听listen描述符是否有相应，及时将客户连接信息放于一个队列，epoll和队列都是在主进程/线程中，由子进程/线程来接管各个描述符，对描述符进行下一步操作，包括connect和数据读写。主程读写就绪事件
+
+![image](https://gitee.com/lifutian66/img/raw/master/img/943117-20160512230858562-1336019094.png)
+
+Preactor模式：被动，你给我收十个字节，收好了跟俺说一声。
+
+Preactor模式完全将IO处理和业务分离，使用异步IO模型，即内核完成数据处理后主动通知给应用处理，主进程/线程不仅要完成listen任务，还需要完成内核数据缓冲区的映射，直接将数据buff传递给业务线程，业务线程只需要处理业务逻辑即可。
+
+
+
+![image](https://gitee.com/lifutian66/img/raw/master/img/943117-20160512230902249-663518390.png)
+
+
 
 ### 4.jvm
 
