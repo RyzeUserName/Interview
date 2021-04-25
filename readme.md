@@ -1,5 +1,3 @@
-
-
 参考 https://github.com/AobingJava/JavaFamily
 
 ## 1.基础
@@ -1420,6 +1418,8 @@ Preactor模式完全将IO处理和业务分离，使用异步IO模型，即内�
 
 ![虚拟机](https://gitee.com/lifutian66/img/raw/master/img/%E8%99%9A%E6%8B%9F%E6%9C%BA.png)
 
+##### 1.详情
+
 **程序计数器**
 
 ​		可以看作是当前线程所执行的 字节码的行号指示器，一个处理器（对于多核处理器来说是一个内核）都只会执行一条线程中的指令。因 
@@ -1479,6 +1479,22 @@ returnAddress类型（指向了一个字节码指令的地址）
 ​		并不是虚拟机运行时数据区的一部分，jdk1.4引入NIO，可以使用Native函数库直接分配堆外内存，然后通过一个存储在Java堆里面的 DirectByteBuffer对象
 
 作为这块内存的引用进行操作。这样能在一些场景中显著提高性能，因为避免了 在Java堆和Native堆中来回复制数据，直接使用的是物理机内存。
+
+##### 2.对象（HotSpot）
+
+1. 对象在内存中
+
+   由三部分组成，对象头、实例数据、对齐填充
+
+   
+
+2. 对象创建
+
+   openjdk\hotspot\src\share\vm\classfile\bytecodeInterpreter.cpp
+
+3. 对象访问
+
+
 
 #### 2.垃圾回收算法
 
