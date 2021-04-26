@@ -1486,11 +1486,37 @@ returnAddress类型（指向了一个字节码指令的地址）
 
    由三部分组成，对象头、实例数据、对齐填充
 
+   ![对象详情](https://gitee.com/lifutian66/img/raw/master/img/%E5%AF%B9%E8%B1%A1%E8%AF%A6%E6%83%85.jpg)
+
+   对象头有两部分组成：
+
+   ​	1.mark work，对象运行时数据，hashcode、GC分带年龄、锁定状态、线程池有锁、偏向锁id、偏向时间戳等，动态数据结构，空间少储存多，复用空间
+
+   ​		未开启压缩指针的话，32系统就是32位，64就是64
+
+   ​		
+
+   ```java
+   //
+   //  32 bits:
+   //  --------
+   //             hash:25 ------------>| age:4    biased_lock:1 lock:2 (normal object)
+   //             JavaThread*:23 epoch:2 age:4    biased_lock:1 lock:2 (biased object)
+   //             size:32 ------------------------------------------>| (CMS free block)
+   //             PromotedObject*:29 ---------->| promo_bits:3 ----->| (CMS promoted object)
+   ```
+
+   ![img](https://gitee.com/lifutian66/img/raw/master/img/20190612142936955.png)
+
    
+
+   ​	2.类型指针，对象指向它的类型原数据指针（不是所有虚拟机都有），数组的话还需要记录数组的长度
 
 2. 对象创建
 
    openjdk\hotspot\src\share\vm\classfile\bytecodeInterpreter.cpp
+
+   ![对象创建](https://gitee.com/lifutian66/img/raw/master/img/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.jpg)
 
 3. 对象访问
 
