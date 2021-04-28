@@ -1420,7 +1420,9 @@ Preactor模式完全将IO处理和业务分离，使用异步IO模型，即内�
 
 ##### 1.详情
 
-**程序计数器**
+虚拟机内存以及dump查看工具为jdk8 bin目录下的  jvisualvm.exe
+
+###### **1.程序计数器**
 
 ​		可以看作是当前线程所执行的 字节码的行号指示器，一个处理器（对于多核处理器来说是一个内核）都只会执行一条线程中的指令。因 
 
@@ -1432,7 +1434,7 @@ Preactor模式完全将IO处理和业务分离，使用异步IO模型，即内�
 
 为空（Undefined）
 
-**Java虚拟机栈** 
+###### **2.Java虚拟机栈** 
 
 ​		虚拟机栈的生命周期与线程相同， 描述的是 java方法执行的线程内存模型，每个方法执行的时候，java虚拟机会同步创建一个栈帧，用于存储局部变量表、
 
@@ -1448,15 +1450,52 @@ returnAddress类型（指向了一个字节码指令的地址）
 
 ​		如果Java虚拟机栈容量可以动态扩展当栈扩展时无法申请到足够的内存会抛出OutOfMemoryError异常。
 
-**本地方法栈**
+###### **3.本地方法栈**
 
 ​		本地方法栈与虚拟机栈相似，区别就是 java虚拟机栈为虚拟机执行java方法（字节码）服务，本地方法栈为虚拟机使用本地方法（native）服务
 
-**堆**
+​		**HotSpot虚拟机中并不区分虚拟机栈和本地方法栈**，参数-Xoss参数虽然存在，但是在Hotspot不起作用，栈容量由-Xss决定，
+
+
+
+
+
+###### **4.堆**
 
 ​		虚拟机启动时创建，几乎所有的对象和数组都在堆上分配内存，是垃圾回收器管理的区域。所有线程共享的java堆都可以划分出多个线程私有的线程缓冲区（Thread Local Allocation Buffer，TLAB）以提升对象分配时的效率。
 
-**方法区 **
+OOM 示例
+
+```java
+ /**
+     * java 堆溢出
+     * 1.频繁创建对象，保证不被回收
+     * VM Args -Xmx20m -Xms20m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=d:\test1.hprof
+     */ 
+public static void main(String[] args) {
+        List<OOMObject> list = new ArrayList<OOMObject>();
+        while (true) {
+            list.add(new OOMObject());
+        }
+ }
+
+    static class OOMObject {
+    }
+```
+
+报错信息为：java.lang.OutOfMemoryError: Java heap space
+
+jvisualvm 打开dump 详情
+
+![image-20210428105940526](https://gitee.com/lifutian66/img/raw/master/img/image-20210428105940526.png)
+
+以上显示对象过多创建 
+
+查看单个对象的 GC Roots，其引用持有为ArrayList 垃圾回收根节点，无法回收，gc不回收，对象创建过多，导致OOM
+
+![image-20210428110543704](https://gitee.com/lifutian66/img/raw/master/img/image-20210428110543704.png)
+
+###### **5.方法区 **
 
 ​		jdk8之前  方法区称呼为“永久代”，本质上两者并不等价，只是使用永久代实现了方法区，这样方法区 就能像堆一样 做垃圾管理，jdk8废弃了永久代，采用本
 
@@ -1464,7 +1503,7 @@ returnAddress类型（指向了一个字节码指令的地址）
 
 ​		线程共享的，用于存储，java虚拟机加载的类型信息、常量、静态变量、即时编辑器编译后的代码缓存
 
-**运行时常量池**
+###### **6.运行时常量池**
 
 ​		是方法区的一部分，class 文件除了版本信息，字段，方法，接口描述信息等还有常量，用于存放编译期生成的各种字面量和符号引用，这部分内容将会在类
 
@@ -1482,7 +1521,7 @@ returnAddress类型（指向了一个字节码指令的地址）
 
 ##### 2.对象（HotSpot）
 
-1. 对象在内存中
+1. 对象组成
 
    由三部分组成，对象头、实例数据、对齐填充
 
@@ -1494,19 +1533,42 @@ returnAddress类型（指向了一个字节码指令的地址）
 
    ​		未开启压缩指针的话，32系统就是32位，64就是64
 
-   ​		
-
    ```java
-   //
    //  32 bits:
    //  --------
    //             hash:25 ------------>| age:4    biased_lock:1 lock:2 (normal object)
    //             JavaThread*:23 epoch:2 age:4    biased_lock:1 lock:2 (biased object)
    //             size:32 ------------------------------------------>| (CMS free block)
    //             PromotedObject*:29 ---------->| promo_bits:3 ----->| (CMS promoted object)
+   //
+   //  64 bits:
+   //  --------
+   //  unused:25 hash:31 -->| unused:1   age:4    biased_lock:1 lock:2 (normal object)
+   //  JavaThread*:54 epoch:2 unused:1   age:4    biased_lock:1 lock:2 (biased object)
+   //  PromotedObject*:61 --------------------->| promo_bits:3 ----->| (CMS promoted object)
+   //  size:64 ----------------------------------------------------->| (CMS free block)
+   //
+   //  unused:25 hash:31 -->| cms_free:1 age:4    biased_lock:1 lock:2 (COOPs && normal object)
+   //  JavaThread*:54 epoch:2 cms_free:1 age:4    biased_lock:1 lock:2 (COOPs && biased object)
+   //  narrowOop:32 unused:24 cms_free:1 unused:4 promo_bits:3 ----->| (COOPs && CMS promoted object)
+   //  unused:21 size:35 -->| cms_free:1 unused:7 ------------------>| (COOPs && CMS free block)
    ```
 
+   **hash：** 对象的哈希码
+
+   **age：** 分代年龄
+
+   **biased_lock：** 偏向锁标识位
+
+   **lock：** 锁状态标识位
+
+   **JavaThread\*：** 保存持有偏向锁的线程ID
+
+   **epoch：** 保存偏向时间戳
+
    ![img](https://gitee.com/lifutian66/img/raw/master/img/20190612142936955.png)
+
+   ![img](https://gitee.com/lifutian66/img/raw/master/img/2019061214432370.png)
 
    
 
@@ -1520,7 +1582,19 @@ returnAddress类型（指向了一个字节码指令的地址）
 
 3. 对象访问
 
+   1.句柄池访问
 
+   ​	间接访问，在堆内会划分出一块作为句柄池，reference中存储就是对象的句柄地址，句柄中包含 实例数据 和 类型数据信息的地址
+
+   ​	好处就是在垃圾回收移动时，只需要修改句柄池指向对象实例数据的指针，增加一次指针定位开销
+
+   ​	![image-20210428103846411](https://gitee.com/lifutian66/img/raw/master/img/image-20210428103846411.png)
+
+   2.直接访问
+   
+   ​	目前机HotSpot虚拟机在用，节省一次指针定位
+
+![image-20210428103916118](https://gitee.com/lifutian66/img/raw/master/img/image-20210428103916118.png)
 
 #### 2.垃圾回收算法
 
