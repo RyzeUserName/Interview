@@ -1454,9 +1454,91 @@ returnAddress类型（指向了一个字节码指令的地址）
 
 ​		本地方法栈与虚拟机栈相似，区别就是 java虚拟机栈为虚拟机执行java方法（字节码）服务，本地方法栈为虚拟机使用本地方法（native）服务
 
-​		**HotSpot虚拟机中并不区分虚拟机栈和本地方法栈**，参数-Xoss参数虽然存在，但是在Hotspot不起作用，栈容量由-Xss决定，
+​		**HotSpot虚拟机中并不区分虚拟机栈和本地方法栈**，参数-Xoss参数虽然存在，但是在Hotspot不起作用，栈容量由-Xss决定
 
+​		StackOverflowError  代码
 
+​	情况1： 创建大量本地变量，占用大量局部变量表，增大栈帧长度
+
+```java
+	public static void main(String[] args) {
+        try {
+            test2();
+        } catch (Error e) {
+            System.out.println("stack length:" + stackLength);
+            throw e;
+        }
+    }
+    private static int stackLength = 0;
+    /**
+     * java 栈溢出
+     * 1.定义大量的变量，增大本地方法栈方中本地变量表的长度。
+     * VM args: -Xss128k 
+     */
+    public static void test2() {
+        long unused1, unused2, unused3, unused4, unused5, unused6, unused7, unused8, unused9,
+            unused10, unused11, unused12, unused13, unused14, unused15, unused16, unused17, unused18,
+            unused19, unused20, unused21, unused22, unused23, unused24, unused25, unused26, unused27,
+            unused28, unused29, unused30, unused31, unused32, unused33, unused34, unused35, unused36,
+            unused37, unused38, unused39, unused40, unused41, unused42, unused43, unused44, unused45,
+            unused46, unused47, unused48, unused49, unused50, unused51, unused52, unused53, unused54,
+            unused55, unused56, unused57, unused58, unused59, unused60, unused61, unused62, unused63,
+            unused64, unused65, unused66, unused67, unused68, unused69, unused70, unused71, unused72,
+            unused73, unused74, unused75, unused76, unused77, unused78, unused79, unused80, unused81,
+            unused82, unused83, unused84, unused85, unused86, unused87, unused88, unused89, unused90,
+            unused91, unused92, unused93, unused94, unused95, unused96, unused97, unused98, unused99,
+            unused100;
+        stackLength++;
+        test2();
+        unused1 = unused2 = unused3 = unused4 = unused5 = unused6 = unused7 = unused8 = unused9 = unused10 =
+        unused11 = unused12 = unused13 = unused14 = unused15 = unused16 = unused17 = unused18 = unused19 =
+        unused20 = unused21 = unused22 = unused23 = unused24 = unused25 = unused26 = unused27 = unused28 =
+        unused29 = unused30 = unused31 = unused32 = unused33 = unused34 = unused35 = unused36 = unused37 =
+        unused38 = unused39 = unused40 = unused41 = unused42 = unused43 = unused44 = unused45 = unused46 =
+        unused47 = unused48 = unused49 = unused50 = unused51 = unused52 = unused53 = unused54 = unused55 =
+        unused56 = unused57 = unused58 = unused59 = unused60 = unused61 = unused62 = unused63 = unused64 =
+        unused65 = unused66 = unused67 = unused68 = unused69 = unused70 = unused71 = unused72 = unused73 =
+        unused74 = unused75 = unused76 = unused77 = unused78 = unused79 = unused80 = unused81 = unused82 =
+        unused83 = unused84 = unused85 = unused86 = unused87 = unused88 = unused89 = unused90 = unused91 =
+        unused92 = unused93 = unused94 = unused95 = unused96 = unused97 = unused98 = unused99 = unused100 = 0;
+    }
+```
+
+​	控制台打印：
+
+​	stack length:52
+
+​	java.lang.StackOverflowError
+
+情况2： 方法不断递归 占用大量栈帧
+
+```java
+
+    public static void main(String[] args) {
+        try {
+            test22();
+        } catch (Error e) {
+            System.out.println("stack length:" + stackLength);
+            throw e;
+        }
+    }
+    private static int stackLength = 0;
+    /**
+     * java 栈溢出
+     * 2.方法不断递归 占用大量栈帧
+     * VM args: -Xss128k
+     */
+    public static void test22(){
+        stackLength++;
+        test22();
+    }
+```
+
+控制台：
+
+stack length:1086
+
+java.lang.StackOverflowError
 
 
 
@@ -1513,11 +1595,58 @@ jvisualvm 打开dump 详情
 
 ​        中相应Strnig的引用；若不存在，则会在常量池中创建一个等值的String，然后返回这个String在常量池中的引用
 
-**直接内存** 
+​		**注意**：由于jdk7开始逐步去永久代计划，jdk6以及之前的虚拟机的常量池实现是在永久代，可通过参数-XX: PermSize 和-XX: MaxPermSize 调整永久代大小，
+
+​		间接调整常量池的大小，可用过String::intern() 测试， 其异常java.lang.OutOfMemoryError: PermGen space 
+
+​	    jdk8是通过元空间（堆）实现的常量池，其限制方法区大小测试 是毫无意义的 ，只会出现的OOM 也会提示  Java heap space 
+
+​		元空间 参数限制 ：
+
+​		-XX：MaxMetaspaceSize：设置元空间最大值，默认是-1，即不限制，或者说只受限于本地内存大小 
+
+​		-XX：MetaspaceSize：设置元空间大小，单位字节，达到该值就会触发垃圾收集 进行类型卸载，同时收集器会对该值进行调整：如果释放了大量的空间，就
+
+​				适当降低该值；如果释放了很少的空间，那么在不超过-XX：MaxMetaspaceSize（如果设置了的话）的情况下，适当提高该值
+
+​	
+
+###### **7.直接内存** 
 
 ​		并不是虚拟机运行时数据区的一部分，jdk1.4引入NIO，可以使用Native函数库直接分配堆外内存，然后通过一个存储在Java堆里面的 DirectByteBuffer对象
 
 作为这块内存的引用进行操作。这样能在一些场景中显著提高性能，因为避免了 在Java堆和Native堆中来回复制数据，直接使用的是物理机内存。
+
+​		**注意**：
+
+​		容量大小可通过-XX：MaxDirectMemorySize 参数来指定 直接内存的最大值
+
+​		NIO 中 DirectByteBuffer类直接通 过反射获取Unsafe实例进行内存分配
+
+​	OOM 代码
+
+​	
+
+```java
+   /**
+	 *  无限使用直接内存
+     *  VM Args -Xmx20M -XX:MaxDirectMemorySize=10M  -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=d:\test1.hprof
+     */
+    public static void main(String[] args) throws IllegalAccessException {
+        Field unsafeField = Unsafe.class.getDeclaredFields()[0];
+        unsafeField.setAccessible(true);
+        Unsafe unsafe = (Unsafe) unsafeField.get(null);
+        while (true) {
+            unsafe.allocateMemory(_1MB);
+        }
+    }
+```
+
+报错：java.lang.OutOfMemoryError 
+
+​           at sun.misc.Unsafe.allocateMemory(Native Method) 
+
+有时候 OOM 但是堆信息无明显错误，使用了NIO 这时候就应该考虑 直接内存 使用
 
 ##### 2.对象（HotSpot）
 
@@ -1596,7 +1725,15 @@ jvisualvm 打开dump 详情
 
 ![image-20210428103916118](https://gitee.com/lifutian66/img/raw/master/img/image-20210428103916118.png)
 
-#### 2.垃圾回收算法
+#### 2.垃圾回收
+
+##### 1.什么是垃圾
+
+​	
+
+##### 2.什么时候回收
+
+##### 3.怎么回收
 
 
 
