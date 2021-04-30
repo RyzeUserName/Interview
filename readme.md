@@ -1632,6 +1632,7 @@ jvisualvm 打开dump 详情
 	 *  无限使用直接内存
      *  VM Args -Xmx20M -XX:MaxDirectMemorySize=10M  -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=d:\test1.hprof
      */
+	private static final int _1MB = 1024 * 1024;
     public static void main(String[] args) throws IllegalAccessException {
         Field unsafeField = Unsafe.class.getDeclaredFields()[0];
         unsafeField.setAccessible(true);
@@ -1646,7 +1647,9 @@ jvisualvm 打开dump 详情
 
 ​           at sun.misc.Unsafe.allocateMemory(Native Method) 
 
-有时候 OOM 但是堆信息无明显错误，使用了NIO 这时候就应该考虑 直接内存 使用
+有时候 OOM 但是堆信息无明显错误，考虑 使用了NIO 这时候就应该考虑 直接内存 使用
+
+
 
 ##### 2.对象（HotSpot）
 
@@ -1705,7 +1708,82 @@ jvisualvm 打开dump 详情
 
 2. 对象创建
 
-   openjdk\hotspot\src\share\vm\classfile\bytecodeInterpreter.cpp
+   openjdk\hotspot\src\share\vm\interpreter\bytecodeInterpreter.cpp
+
+   ```c++
+   //new 这个指令
+   CASE(_new): {
+       	//获取class的下标
+           u2 index = Bytes::get_Java_u2(pc+1);
+       	// 获取方法区常量池
+           ConstantPool* constants = istate->method()->constants();
+       	//如果需要新建对象的类被解析过
+           if (!constants->tag_at(index).is_unresolved_klass()) {
+             // Make sure klass is initialized and doesn't have a finalizer
+             Klass* entry = constants->slot_at(index).get_klass();
+             assert(entry->is_klass(), "Should be resolved klass");
+             Klass* k_entry = (Klass*) entry;
+             assert(k_entry->oop_is_instance(), "Should be InstanceKlass");
+             InstanceKlass* ik = (InstanceKlass*) k_entry;
+              //确保对象所属类型已经经过初始化阶段
+             if ( ik->is_initialized() && ik->can_be_fastpath_allocated() ) {
+               // 取对象长度
+               size_t obj_size = ik->size_helper();
+               oop result = NULL;
+               // 记录是否需要将对象所有字段置零值
+               bool need_zero = !ZeroTLAB;
+                //是否在TLAB中分配对象
+               if (UseTLAB) {
+                 result = (oop) THREAD->tlab().allocate(obj_size);
+               }
+               // Disable non-TLAB-based fast-path, because profiling requires that all
+               // allocations go through InterpreterRuntime::_new() if THREAD->tlab().allocate
+               // returns NULL.
+   #ifndef CC_INTERP_PROFILE
+               if (result == NULL) {
+                 need_zero = true;
+                 // 直接在eden中分配对象
+               retry:
+                 HeapWord* compare_to = *Universe::heap()->top_addr();
+                 HeapWord* new_top = compare_to + obj_size;
+               // cmpxchg是x86中的CAS指令，这里是一个C++方法，通过CAS方式分配空间，并发失败的 话，转到retry中重试直至成功分配为止
+                 if (new_top <= *Universe::heap()->end_addr()) {
+                   if (Atomic::cmpxchg_ptr(new_top, Universe::heap()->top_addr(), compare_to) != compare_to) {
+                     goto retry;
+                   }
+                   result = (oop) compare_to;
+                 }
+               }
+   #endif
+               if (result != NULL) {
+                 //  如果需要，为对象初始化零值
+                 if (need_zero ) {
+                   HeapWord* to_zero = (HeapWord*) result + sizeof(oopDesc) / oopSize;
+                   obj_size -= sizeof(oopDesc) / oopSize;
+                   if (obj_size > 0 ) {
+                     memset(to_zero, 0, obj_size * HeapWordSize);
+                   }
+                 }
+                  // 根据是否启用偏向锁，设置对象头信息 
+                 if (UseBiasedLocking) {
+                   result->set_mark(ik->prototype_header());
+                 } else {
+                   result->set_mark(markOopDesc::prototype());
+                 }
+                 result->set_klass_gap(0);
+                 result->set_klass(k_entry);
+                 // Must prevent reordering of stores for object initialization
+                 // with stores that publish the new object.
+                 OrderAccess::storestore();
+                 // 将对象引用入栈，继续执行下一条指令  
+                 SET_STACK_OBJECT(result, 0);
+                 UPDATE_PC_AND_TOS_AND_CONTINUE(3, 1);
+               }
+             }
+           }
+   ```
+
+   其流程大致：
 
    ![对象创建](https://gitee.com/lifutian66/img/raw/master/img/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.jpg)
 
@@ -1729,13 +1807,115 @@ jvisualvm 打开dump 详情
 
 ##### 1.什么是垃圾
 
-​	
+ 什么是引用？
+
+​	分为 强 软 弱 虚 
+
+​	强引用  o=new Object() ，只要引用关系在，垃圾回收就不会回收
+
+​	软引用  SoftReference， 生命周期 是在 发生内存溢出前后 
+
+​	弱引用  WeakReference， 生命周期 是在 一次 垃圾回收 前后
+
+​	虚引用 PhantomReference，作用 为了能在这个对象被收集器回收时收到一个系统通知
+
+###### 1.引用计数
+
+​	对象内部维护一个计数器，当被引用的时候加1，引用失效时，减一，直到没引用时变成0，即可回收
+
+​	缺点：无法解决循环引用
+
+###### 2.可达性分析
+
+​	主流语言都采用此算法，基本思路就是通过一系列称为“GC Roots”的根对象最为起点集，从这些节点开始，根据这些引用关系，向下搜索，搜索过程称为
+
+引用链，如果哪个对象 与GC Roots没有引用链，那么这个对象就 可以被回收了，参考下图
+
+![image-20210428155347352](https://gitee.com/lifutian66/img/raw/master/img/image-20210428155347352.png)
+
+###### 3.方法区
+
+常量的回收 只需判断是否被引用，常量池中的接口、方法、字段的符号引用其他也是一样
+
+判定一个类型是否属于“不再被使用的类”的条件 比较苛刻：
+
+​	1.该类所有的实例都已经被回收（包含派生子类）
+
+​	2.加载该类的类加载器已经被回收，这个条件除非是经过精心设计的可替换类加载器的场景，如OSGi、JSP的重加载等，否则通常是很难达成的。
+
+​	3.该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法
+
+以上条件 满足 被允许对回收，并不是一定会被回收 
+
+
+
+注意：finalize() 方法不建议使用 ，try-finally或者其他方法更好
 
 ##### 2.什么时候回收
 
+内存不足，或超过设置百分比
+
 ##### 3.怎么回收
 
+垃圾算法：**引用计数式垃圾收集**  和  **追踪式垃圾收集**  也被称为 **直接垃圾收集** 和 **间接垃圾收集**
 
+由于引用计数算法均为在主流垃圾回收中被采用，故以下算法均为  **间接/追踪式垃圾收集**
+
+大多数商用虚拟机大多数遵循了 **分代收集**（人们长久积累的经验） 新生代（对象朝生晚死）+老年代（几乎不会被回收）
+
+以分代理论为基础，大多数虚拟机均是将**java堆**分割成不同的区域，然后将对象按照其年龄（经过垃圾收集的次数）分配进入不同的区
+
+根据分代/分区不同的特点，采用不同算法
+
+**跨代引用** 新生代引用老年代对象，为了不在为了少量的跨代引用扫描整个老年代，在新生代建立一个全局的数据结构（“记忆集”），这个结构
+
+把老年代划分成若干小块，标识出老年代哪块存在跨代引用，在Minor GC 时，只有包含了跨代引用的小块内存的对象才会被GC Roots 扫描
+
+**Minor GC** 新生代收集  
+
+**Major GC** 老年代收集  
+
+**Mixed GC** 混合收集 新生代和 部分老年代垃圾收集  G1中会有这种情况
+
+**Full GC** 整堆收集
+
+###### 1.标记清除
+
+Mark-Sweep 顾名思义 先**标记** 然后**清除**
+
+![image-20210430134123644](https://gitee.com/lifutian66/img/raw/master/img/image-20210430134123644.png)
+
+缺点：1.执行效率低，随着数量增长而降低
+
+​			2.内存空间碎片化 
+
+###### 2.标记复制
+
+​		先标记然后复制   到预留区，将原区域清空，大多数用于 堆的新生代
+
+​	![image-20210430134224499](https://gitee.com/lifutian66/img/raw/master/img/image-20210430134224499.png)
+
+hotspot新生代会被划分成三块 Eden：Survivor = 8: 1 如下图
+
+![123](https://gitee.com/lifutian66/img/raw/master/img/123.png)
+
+每次新生代中可用内存为整个空间的90%，只有一个Survivor 是被 “浪费的”，即 10%为预留区，但是谁也不能100%保证Minor GC 要复制的对象 不超过一个 Survivor 区，那么就需要依赖其他内存区域（老年代）进行分配担保
+
+###### 3.标记整理
+
+先标记，后进行移动整理，老年代采用此算法 ，其考量有 移动则内存回收变复杂(移动，更新引用 需要（stop the world)，不移动内存分配变复杂(空间碎片)
+
+吞吐量---》标记--整理  减少分配时间
+
+低延迟---》标记--清除  减少 stop the world
+
+另外一种就是，默认采用 标记清除，达到一定程度之后 标记整理 
+
+![image-20210430135623696](https://gitee.com/lifutian66/img/raw/master/img/image-20210430135623696.png)
+
+具体垃圾收集器：
+
+![垃圾回收器-1550915446518](https://gitee.com/lifutian66/img/raw/master/img/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%99%A8-1550915446518.jpg)
 
 #### 3.工具/命令
 
