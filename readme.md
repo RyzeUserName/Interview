@@ -1939,7 +1939,9 @@ hotspot新生代会被划分成三块 Eden：Survivor = 8: 1 如下图
 
 6.ZGC收集器是一款基于Region内存(动态创建和销毁，以及动态的区域容量大小)布局的，（暂时） 不设分代的，使用了读屏障、染色指针和内存多重映射等技术
 
-来实现可并发的标记-整理算法的，以低延迟为首要目标的一款垃圾收集器
+来实现可并发的标记-整理算法的，以低延迟为首要目标的一款垃圾收集器，其**并发核心**：染色指针技术+读写屏障 ，染色指针 直接把标记信息记在引用对象的指
+
+针上
 
 7.**G1**垃圾回收器 面向全堆的，基于Region的堆内存布局，把连续的Java堆划分为多个大小相等的独立区域（Region），每一个Region都可以根据需要，扮演新生代
 
@@ -1955,7 +1957,17 @@ Humongous Region之中），或者老年代空间。收集器能够对扮演不�
 
 跨Region引用，各Region 自己维护记忆集，Key是别的Region的起始地址，Value是一个集合，里面存储的元素是卡表的索引号，也就是 卡表。
 
+9.jdk 9之后 jdk log 命令 -Xlog[ : [selector  ] [ : [ output ] [ : [ decorators ] [ :output-options]]]] 
+
+10.垃圾收集器参数总结 
+
+![image-20210506145740796](https://gitee.com/lifutian66/img/raw/master/img/image-20210506145740796.png)
+
+![image-20210506145801360](https://gitee.com/lifutian66/img/raw/master/img/image-20210506145801360.png)
+
 #### 3.工具/命令
+
+
 
 ### 5.数据结构与算法
 
