@@ -1919,15 +1919,15 @@ hotspot新生代会被划分成三块 Eden：Survivor = 8: 1 如下图
 
 **注意**：
 
-1.尽可能地缩短垃圾收集时用户线程的停顿时间，即最短停顿，低延迟    CMS（增量式更新） ，G1（原始快照）《标记阶段的并发》
+**1.**尽可能地缩短垃圾收集时用户线程的停顿时间，即最短停顿，低延迟    CMS（增量式更新） ，G1（原始快照）《标记阶段的并发》
 
-2.可控 吞吐量  处理器用于运行用户代码的时间与处理器总消耗时间的比值   Parallel Scavenge
+**2.**可控 吞吐量  处理器用于运行用户代码的时间与处理器总消耗时间的比值   Parallel Scavenge
 
-3.垃圾回收 不可能三角 内存占用（Footprint）、吞吐量（Throughput）和延迟（Latency）
+**3.**垃圾回收 不可能三角 内存占用（Footprint）、吞吐量（Throughput）和延迟（Latency）
 
-4.Shenandoah（RedHat） 和 ZGC 两个 低延迟垃圾收集器
+**4.**Shenandoah（RedHat） 和 ZGC 两个 低延迟垃圾收集器
 
-5.Shenandoah 类似G1，但是抛弃分代算法，记忆集采用连接矩阵 全局数据结构 （二维表格） ，其多个阶段都是并发的，其**并发核心**  Brooks Pointer
+**5.**Shenandoah 类似G1，但是抛弃分代算法，记忆集采用连接矩阵 全局数据结构 （二维表格） ，其多个阶段都是并发的，其**并发核心**  Brooks Pointer
 
 被移动对象原有的内存上设置保护陷阱（Memory Protection Trap），一旦用户程序访问到归属于旧对象的内存空间就会产生自陷中段，进入预设好的异 
 
@@ -1937,13 +1937,13 @@ hotspot新生代会被划分成三块 Eden：Survivor = 8: 1 如下图
 
 访问一致性，引入了读、写屏障
 
-6.ZGC收集器是一款基于Region内存(动态创建和销毁，以及动态的区域容量大小)布局的，（暂时） 不设分代的，使用了读屏障、染色指针和内存多重映射等技术
+**6.**ZGC收集器是一款基于Region内存(动态创建和销毁，以及动态的区域容量大小)布局的，（暂时） 不设分代的，使用了读屏障、染色指针和内存多重映射等技术
 
 来实现可并发的标记-整理算法的，以低延迟为首要目标的一款垃圾收集器，其**并发核心**：染色指针技术+读写屏障 ，染色指针 直接把标记信息记在引用对象的指
 
 针上
 
-7.**G1**垃圾回收器 面向全堆的，基于Region的堆内存布局，把连续的Java堆划分为多个大小相等的独立区域（Region），每一个Region都可以根据需要，扮演新生代
+**7.****G1**垃圾回收器 面向全堆的，基于Region的堆内存布局，把连续的Java堆划分为多个大小相等的独立区域（Region），每一个Region都可以根据需要，扮演新生代
 
 的Eden空间、Survivor空间，Humongous区域（大小超过Region容量的一半称为H区域，超过了整个Region容量的超级大对象， 将会被存放在N个连续的
 
@@ -1957,9 +1957,9 @@ Humongous Region之中），或者老年代空间。收集器能够对扮演不�
 
 跨Region引用，各Region 自己维护记忆集，Key是别的Region的起始地址，Value是一个集合，里面存储的元素是卡表的索引号，也就是 卡表。
 
-9.jdk 9之后 jdk log 命令 -Xlog[ : [selector  ] [ : [ output ] [ : [ decorators ] [ :output-options]]]] 
+**8.**jdk 9之后 jdk log 命令 -Xlog[ : [selector  ] [ : [ output ] [ : [ decorators ] [ :output-options]]]] 
 
-10.垃圾收集器参数总结 
+**9.**垃圾收集器参数总结 
 
 ![image-20210506145740796](https://gitee.com/lifutian66/img/raw/master/img/image-20210506145740796.png)
 
@@ -1967,11 +1967,105 @@ Humongous Region之中），或者老年代空间。收集器能够对扮演不�
 
 #### 3.工具/命令
 
+**基础工具**
 
+##### 1.jps 虚拟机进程状况
+
+jps [ options ] [ hostid ] 
+
+![image-20210507101346462](https://gitee.com/lifutian66/img/raw/master/img/image-20210507101346462.png)
+
+##### 2.jstat 虚拟机统计信息监视
+
+jstat [ option vmid [interval[s|ms] [count]] ] 
+
+选项**option** 主要分为三类：类加载、垃圾收集、运行期编译状况
+
+![image-20210507102046504](https://gitee.com/lifutian66/img/raw/master/img/image-20210507102046504.png)
+
+如果是本地虚拟机进程 **VMID与LVMID**  一致，如果是远程虚拟机进程，那VMID的格式应当是：[ protocol: ] [ // ]lvmid [@hostname[:port]/servername] 
+
+参数**interval**和**count**代表**查询间隔和次数**
+
+##### 3.jinfo Java配置信息
+
+jinfo [ option ] pid   
+
+jinfo 可修改配置信息 的值
+
+##### 4.jmap 内存映像
+
+jmap [ option ] vmid 
+
+option 参数：
+
+![image-20210507102722040](https://gitee.com/lifutian66/img/raw/master/img/image-20210507102722040.png)
+
+##### 5.jhat 虚拟机堆转储快照分析
+
+jhat dump 文件 访问 http://localhost:7000
+
+##### 6.jstack 堆栈跟踪
+
+jstack [ option ] vmid 
+
+![image-20210507113813417](https://gitee.com/lifutian66/img/raw/master/img/image-20210507113813417.png)
+
+可视化工具
+
+VisualVM，JHSDB（jdk9），JConsole，JMC
+
+##### 7.JHSDB 基于服务性代理的调试工具
+
+![image-20210507140250898](https://gitee.com/lifutian66/img/raw/master/img/image-20210507140250898.png)
+
+##### 8.JConsole Java监视与管理控制台 
+
+过JDK/bin目录下的jconsole.exe
+
+##### 9.VisualVM 多合-故障处理工具
+
+过JDK/bin目录下的jvisualvm.exe
+
+##### 10.Java Mission Control 可持续在线的监控工具 
+
+付费的
 
 ### 5.数据结构与算法
 
+算法必须符合的**5个条件**：1.输入2.输出3.有效4.有限5.明确
+
+**时间复杂度** ：O(1) 常数时间  O(log₂n) 次线性时间 O(n) 线性时间  O(nlog₂n) 线性 对数时间
+
+​						O(n²) 平方时间 O(n³) 立方时间 O(2ⁿ)指数时间
+
+**算法思想**：
+
+分治法、递归法、动态规划法      大问题拆成小问题处理
+
+迭代法、枚举法、回溯法、贪心法  
+
+**基本数据结构**:
+
+数组、链表、堆栈（先进后出）、队列（先进先出）、树、图、哈希表
+
 #### 1.排序
+
+冒泡排序
+
+选择排序
+
+插入排序
+
+希尔排序
+
+快速排序
+
+合并排序
+
+基数排序
+
+堆积树排序
 
 #### 2.二叉树
 
