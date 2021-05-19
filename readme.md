@@ -2115,19 +2115,140 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
 
 ##### 6.图
 
+描述 顶点之间 “连通与否”，应用于：算法和数据结构的最短路径搜索、拓扑排序等
+
+图 是由 顶点和边组成的集合，通常G（V,E） 表示，其中V表示顶点组成的集合，E表示所有边组成的集合。
+
+分为 无向图（边没有方向）  和有向图（边有方向）
+
 ##### 7.哈希表
+
+将本身的 key通过特定的数学函数运算或使用其他的方法转成相对应的数据存储地址，可以实现快速存取和查询
+
+避免碰撞和溢出，哈希函数尽量简单并且均匀
 
 #### 1.算法
 
+**稳定性：**假定在待排序的记录序列中，存在多个具有相同的关键字的记录，若经过排序，这些记录的相对次序保持不变，即在原序列中，ri=rj，且ri在rj之前，而在排序后的序列中，ri仍在rj之前，则称这种排序算法是稳定的；否则称为不稳定的。
+
 冒泡排序
+
+```java
+  	/**
+     * 冒泡排序  依次左右调换 一次循环把最大的放到最后
+     * 时间复杂度 O(n²)
+     * 最快O(n) 最慢 O(n²)	
+     * 空间复杂度 O(1) 只需要一个额外空间
+     * 稳定排序
+     * 适用于数量少或有部分数据已排序的情况
+     */
+    public static void bubbleSort(int[] array) {
+        int length = array.length;
+        // 循环 n-1次 即可，最后一次 元素就一个，自然不比
+        for (int i = 0; i < length - 1; i++) {
+            // 每循环一次 最后一个元素就已经比较置换完成，之后的不需要比对
+            for (int j = 0; j < length - i - 1; j++) {
+                if (array[j] > array[j + 1]) {
+                    int a = array[j];
+                    array[j] = array[j + 1];
+                    array[j + 1] = a;
+                }
+            }
+        }
+    }
+```
 
 选择排序
 
+```java
+ /**
+     * 选择排序  一次循环找到最大的,最后元素和那个最大的交换
+     * 时间复杂度 O(n²)
+     * 最快O(n²) 最慢 O(n²)
+     * 空间复杂度 O(1) 只需要两个个额外空间
+     * 不稳定排序（排序直接交换会使其稳定性扰乱）
+     * 适用于数量少或有部分数据已排序的情况
+     */
+    public static void selectSort(int[] array) {
+        int length = array.length;
+        for (int i = 0; i < length; i++) {
+            int maxIndex = 0;
+            for (int j = 1; j < length - i - 1; j++) {
+                if (array[j] > array[maxIndex]) {
+                    maxIndex = j;
+                }
+            }
+            int temp = array[maxIndex];
+            array[maxIndex] = array[length - i - 1];
+            array[length - i - 1] = temp;
+        }
+    }
+```
+
 插入排序
+
+```java
+ /**
+     * 插入排序  将数组中元素逐一与排序好的数据进行排序 进行插入,之后进行搬移
+     * 时间复杂度 O(n²)
+     * 最快O(n) 最慢 O(n²)
+     * 空间复杂度 O(1) 只需要一个额外空间
+     * 稳定排序
+     * 大量数据搬移
+     * 适用于部分数据已排序的情况 也适用于往已排序数据插入之后在排序
+     */
+    public static void insertionSort(int[] array) {
+        //认为 i 之前的数组是 排好序的
+        for (int i = 1; i < array.length; i++) {
+            int temp = array[i];
+            int j = i - 1;
+            //j 为 已排好序数组最大的值的下标,依次往前寻找,只需要比这个值小的值的小标
+            // 之后的数值依次往后移1位
+            while (j >= 0 && temp < array[j]) {
+                array[j + 1] = array[j];
+                j--;
+            }
+            //最后 把这个值赋 给该坐标
+            array[j + 1] = temp;
+        }
+    }
+```
 
 希尔排序
 
+```java
+/**
+ * 希尔排序  在插入排序的基础上,将数据按照特定间隔分成几个区,每个区都是用插入排序，再渐渐减少间隔的举例
+ * 时间复杂度 O(n³/²)
+ * 空间复杂度 O(1)
+ * 不稳定排序 (分组使用插入算法,组与组之间会产生不稳定元素)
+ * 适用于部分数据已排序的情况
+ */
+public static void hillSort(int[] array) {
+    //一般以数组的一半长度为初始间隔
+    int length = array.length / 2;
+    //间隔 长度为0 结束递归
+    while (length != 0) {
+        //认为 i 之前的数组是 排好序的 间隔是 length
+        for (int i = length; i < array.length; i++) {
+            int temp = array[i];
+            int j = i - length;
+            //从j往前 寻找 插入的坐标，找到之后，依次后移length 位
+            while (j >= 0 && temp < array[j]) {
+                array[j + length] = array[j];
+                j-=length;
+            }
+            //最后 把这个值赋 给寻找的坐标
+            array[j + length] = temp;
+        }
+        length /= 2;
+    }
+}
+```
+
 快速排序
+
+
 
 合并排序
 
