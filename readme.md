@@ -2131,7 +2131,7 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
 
 **稳定性：**假定在待排序的记录序列中，存在多个具有相同的关键字的记录，若经过排序，这些记录的相对次序保持不变，即在原序列中，ri=rj，且ri在rj之前，而在排序后的序列中，ri仍在rj之前，则称这种排序算法是稳定的；否则称为不稳定的。
 
-冒泡排序
+##### 冒泡排序
 
 ```java
   	/**
@@ -2158,7 +2158,7 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
     }
 ```
 
-选择排序
+##### 选择排序
 
 ```java
  /**
@@ -2185,7 +2185,7 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
     }
 ```
 
-插入排序
+##### 插入排序
 
 ```java
  /**
@@ -2214,7 +2214,7 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
     }
 ```
 
-希尔排序
+##### 希尔排序
 
 ```java
 /**
@@ -2246,15 +2246,181 @@ public static void hillSort(int[] array) {
 }
 ```
 
-快速排序
+##### 快速排序
+
+```java
+/**
+ * 快速排序  分而治之, 在数据中虚拟个中间值，
+ * 按此值分割数据（大的在右边，小的在左边）
+ * 然后以同样方式处理左右两边数据
+ * 时间复杂度 O(n²)  最快O(nlog2n) 最慢 O(n²)
+ * 空间复杂度 O(n)  最坏  O(n)  最好O(log2n)
+ * 不稳定排序
+ * 目前平均时长最快的算法
+ */
+public static void quickSort(int[] array) {
+    quick(array, 0, array.length - 1);
+}
+
+public static void quick(int[] d, int start, int end) {
+    if (start < end) {
+        int i = start, j = end;
+        //基数就是第一个
+        int base = d[i];
+        while (i < j) {
+            // 从右向左找小于base的数来填d[i]
+            while (i < j && d[j] >= base) {
+                j--;
+            }
+            //找到之后 填回 d[i] 这个位置
+            if (i < j) {
+                d[i++] = d[j];
+            }
+            // 从左向右找第一个大于等于base的数 来填 d[j]
+            while (i < j && d[i] < base) {
+                i++;
+            }
+            if (i < j) {
+                d[j--] = d[i];
+            }
+        }
+        //把基数填回去 位置 是 i的位置
+        d[i] = base;
+        //递归 i 的左边 和 右边
+        quick(d, start, i - 1);
+        quick(d, i + 1, end);
+    }
+}
+```
 
 
 
-合并排序
+##### 合并排序
 
-基数排序
+```java
+/**
+ * 合并排序 叫归并排序 分治法的应用
+ * 把待排序序列分为若干个子序列，每个子序列是有序的。
+ * 然后再把有序子序列合并为整体有序序列.
+ * 
+ * 时间复杂度  最快O(nlog2n) 最慢 O(log2n)
+ * 空间复杂度 O(n)
+ * 稳定排序
+ */
+public static void mergeSort(int[] array) {
+    int length = array.length;
+    int half = length / 2;
+    if (length > 1) {
+        int[] left = Arrays.copyOfRange(array, 0, half);
+        int[] right = Arrays.copyOfRange(array, half, length);
+        //递归array的左半部分 右半部分
+        mergeSort(left);
+        mergeSort(right);
+        //归并
+        merge(array, left, right);
+    }
+}
+/**
+ * 把 a,b合并到 array
+ */
+public static void merge(int[] array, int[] a, int[] b) {
+    int i = 0, aI = 0, bI = 0;
+    while (aI < a.length && bI < b.length) {
+        // a、b 依次遍历小的放array 左边
+        if (a[aI] < b[bI]) {
+            array[i++] = a[aI++];
+        } else {
+            array[i++] = b[bI++];
+        }
+    }
+    //左、右 剩下的合并到右边  只可能剩下一边
+    while (aI < a.length) {
+        array[i++] = a[aI++];
+    }
+    while (bI < b.length) {
+        array[i++] = b[bI++];
+    }
+}
+```
 
-堆积树排序
+##### 基数排序
+
+```java
+/**
+ * 基数排序 又叫分配式排序 又称 桶子法
+ * 最高位优先法，简称MSD法：先按k1排序分组，同一组中记录，关键码k1相等
+ * 再对各组按k2排序分成子组，之后，对后面的关键码继续这样的排序分组
+ * 直到按最次位关键码kd对各子组排序后。再将各组连接起来，便得到一个有序序列。
+ * 
+ * 最低位优先法，简称LSD法：先从kd开始排序，再对kd-1进行排序
+ * 依次重复，直到对k1排序后便得到一个有序序列。
+ * 
+ * 时间复杂度为O (nlog(r)m)，其中r为所采取的基数，而m为堆数
+ * 空间复杂度 O(nr)
+ * 稳定排序
+ */
+public static void baseSort(int[] array, int p) {
+    int length = array.length;
+    //重新组合起来时 的下标
+    int k = 0;
+    //表示10的倍数
+    int n = 1;
+    //表示基数
+    int m = 1;
+    //数组的第一维表示可能的余数0-9
+    int[][] temp = new int[10][length];
+    //数组order[i]用来表示该位是i的数的个数
+    int[] order = new int[10];
+    while (m <= p) {
+        for (int i = 0; i < length; i++) {
+            //基数求余 为其二维坐标显示的 行坐标
+            int lsd = ((array[i] / n) % 10);
+            //纵坐标 为 order 的个数
+            temp[lsd][order[lsd]] = array[i];
+            //个数增加
+            order[lsd]++;
+        }
+        //重新组合连接起来
+        for (int i = 0; i < 10; i++) {
+            if (order[i] != 0) {
+                for (int j = 0; j < order[i]; j++) {
+                    array[k] = temp[i][j];
+                    k++;
+                }
+            }
+            // 重置为零
+            order[i] = 0;
+        }
+        n *= 10;
+        k = 0;
+        m++;
+    }
+}
+```
+
+##### 堆积树排序
+
+待写
+
+##### 顺序查找
+
+ 	又称线性查找，将数据一项一项的查找，时间复杂度O(n) 适合数据量少的查找
+
+##### 二分查找
+
+​	 将已排好序的数据队列，将数据切分在寻找 时间复杂度O(log2n)  适合已排好序的查找
+
+##### 插值查找
+
+​	 又称插补查找法，二分查找的改进版，按照数据位置分布，利用公式预测数据所在位置，再以二分法渐渐逼近
+
+​	时间复杂度优于O(log2n)  适合已排好序的查找
+
+##### 斐波那契查找
+
+​		类似二分法，但是其分割范围并不是一半一半，而是以斐波那契级数分割，其查找次数少于二分法，平均时间复杂度O(log2n)
+
+​		斐波那契查找比较复杂需要产生斐波那契树
 
 #### 2.二叉树
 
