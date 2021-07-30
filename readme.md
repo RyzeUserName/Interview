@@ -1803,6 +1803,22 @@ jvisualvm 打开dump 详情
 
 ![image-20210428103916118](https://gitee.com/lifutian66/img/raw/master/img/image-20210428103916118.png)
 
+双亲委派：
+
+加载类的时候 
+
+如果一个类加载器收到了类加载的请求，他首先不会自己去尝试加载这个类，而是把这个请求委派父类加载器去完成。每一个层次的类加载器都是如此，因此所有的加载请求最终都应该传送到顶层的启动类加载器中，只有当父加载器反馈自己无法完成这个请求（他的搜索范围中没有找到所需的类）时，子加载器才会尝试自己去加载。
+
+![c7f1e8b004c1465ca0203bb408d6e861](https://gitee.com/lifutian66/img/raw/master/img/c7f1e8b004c1465ca0203bb408d6e861.jpeg)
+
+- 最基础：Bootstrap ClassLoader（加载JDK的/lib目录下的类）
+- 次基础：Extension ClassLoader（加载JDK的/lib/ext目录下的类）
+- 普通：Application ClassLoader（程序自己classpath下的类）
+
+破坏双亲委派：
+
+​	SPI   JDBC  因为 Bootstrap ClassLoader  加载不到，故使用了 APPClassLoader 加载数据
+
 #### 2.垃圾回收
 
 ##### 1.什么是垃圾
@@ -2127,6 +2143,12 @@ VisualVM，JHSDB（jdk9），JConsole，JMC
 
 避免碰撞和溢出，哈希函数尽量简单并且均匀
 
+算法：1.除数取余  2.平方取中（平方取百、个位数为key）  3.折叠（把数据换成一串数,再把数字拆成几部分，再报他们加起来）
+
+减少碰撞 均匀分布 算法简单
+
+碰撞发生：1.线性探测 2.平方探测 3.再哈希 
+
 #### 1.算法
 
 **稳定性：**假定在待排序的记录序列中，存在多个具有相同的关键字的记录，若经过排序，这些记录的相对次序保持不变，即在原序列中，ri=rj，且ri在rj之前，而在排序后的序列中，ri仍在rj之前，则称这种排序算法是稳定的；否则称为不稳定的。
@@ -2422,7 +2444,173 @@ public static void baseSort(int[] array, int p) {
 
 ​		斐波那契查找比较复杂需要产生斐波那契树
 
+##### 单向链表反转
+
+```java
+public static Node reverse(Node node) {
+    Node pre = null;
+    while (node != null) {
+        //取出后一个
+        Node oldNext = node.next;
+        //后一个置为前一个 指针
+        node.next = pre;
+        //前指针后移
+        pre = node;
+        //后指针后移
+        node = oldNext;
+    }
+    return pre;
+}
+
+static class Node {
+    int data;
+    Node next;
+
+    public Node(int data) {
+        this.data = data;
+    }
+}
+```
+
 #### 2.二叉树
+
+​	**满二叉树**       高度为h，h>=0, 树的节点是2^h-1 
+
+​	**完全二叉树**    一棵深度为k的有n个结点的[二叉树](https://baike.baidu.com/item/二叉树/1602879)，对树中的结点按从上至下、从左到右的顺序进行编号，如果编号为i（1≤i≤n）的结点与[满二叉树](https://baike.baidu.com/item/满二叉树/7773283)中编号为i的
+
+​							结点在二叉树中的位置相同，则这棵二叉树称为完全二叉树。
+
+​	**斜二叉树**  一个二叉树 完全没有左节点/右节点  （链表）
+
+​	**严格二叉树**  一个二叉树非终端节点均有左右非空子树
+
+```java
+public static void main(String[] args) {
+    BinaryTree tree = new BinaryTree();
+    tree.insert(4);
+    tree.insert(3);
+    tree.insert(2);
+    tree.insert(5);
+    tree.insert(1);
+    tree.insert(8);
+    tree.insert(2);
+    tree.insert(2);
+    tree.frontOrder();
+    System.out.println();
+    tree.middleOrder();
+    System.out.println();
+    tree.backOrder();
+}
+
+static class BinaryTree {
+    TreeNode root;
+
+    /**
+     * 插入
+     * 删除
+     * 遍历：
+     * 前序遍历 根->左->右
+     * 中序遍历 左->根->右
+     * 后序遍历 左->右->根
+     * 层序遍历 层数遍历
+     */
+    class TreeNode {
+        TreeNode left;
+        TreeNode right;
+        int data;
+
+        public TreeNode() {
+        }
+
+        public TreeNode(int data) {
+            this.data = data;
+        }
+    }
+
+    public BinaryTree() {
+    }
+
+
+    public BinaryTree(TreeNode root) {
+        this.root = root;
+    }
+
+    void insert(int data) {
+        TreeNode newNode = new TreeNode(data);
+        if (root == null) {
+            this.root = newNode;
+        } else {
+            TreeNode currentNode = root;
+            TreeNode parentNode;
+            while (true) {
+                parentNode = currentNode;
+                //右子树
+                if (data > currentNode.data) {
+                    currentNode = currentNode.right;
+                    if (currentNode == null) {
+                        parentNode.right = newNode;
+                        return;
+                    }
+                } else {
+                    currentNode = currentNode.left;
+                    if (currentNode == null) {
+                        parentNode.left = newNode;
+                        return;
+                    }
+                }
+
+            }
+
+        }
+    }
+
+    void frontOrder() {
+        frontOrder(this.root);
+    }
+
+    void middleOrder() {
+        middleOrder(this.root);
+    }
+
+    void backOrder() {
+        backOrder(this.root);
+    }
+
+    /**
+     * 前序  根->左->右
+     */
+    void frontOrder(TreeNode node) {
+        if (node != null) {
+            System.out.print(node.data);
+            frontOrder(node.left);
+            frontOrder(node.right);
+        }
+    }
+
+    /**
+     * 中序  左->根->右
+     */
+    void middleOrder(TreeNode node) {
+        if (node != null) {
+            frontOrder(node.left);
+            System.out.print(node.data);
+            frontOrder(node.right);
+        }
+    }
+
+    /**
+     * 后序 左->右->根
+     */
+    void backOrder(TreeNode node) {
+        if (node != null) {
+            frontOrder(node.left);
+            frontOrder(node.right);
+            System.out.print(node.data);
+        }
+    }
+
+}
+```
 
 #### 3.B+树
 
@@ -2432,7 +2620,506 @@ public static void baseSort(int[] array, int p) {
 
 #### 1.mysql
 
-### 7.Redis
+数据库是文件的集合，是依照某种数据模型组织起来并存放于二级存储器中的数据集合
+
+![6401](https://gitee.com/lifutian66/img/raw/master/img/6401.png)
+
+mysql 整体架构，查询缓存，解析器，优化器，存储引擎，详细如下：
+
+![image-20210526143228334](https://gitee.com/lifutian66/img/raw/master/img/image-20210526143228334.png)
+
+特点：用C和C ++编写
+
+##### 1.存储引擎
+
+###### **1.InnoDB** 存储引擎 
+
+**1.优点**：1.支持事务 崩溃恢复
+
+​			2.支持行锁
+
+​			3.数据在磁盘上 是基于 聚簇索引（主键索引）存储
+
+![image-20210526151036181](https://gitee.com/lifutian66/img/raw/master/img/image-20210526151036181.png)
+
+**2.最佳实践**：
+
+1.指定一个自动递增的主键
+
+2.外键的合理使用
+
+3.关闭自动提交事务
+
+4.使用 多个短期事务，尽量不要一个事务 执行很长时间
+
+5.不要使用 LOCK TABLES 语句，替换使用 SELECT ..  FOR UPDATE 替代
+
+6.启用  innodb_file_per_table   将表的数据和索引放入单独的文件中，而不是系统表空间中
+
+7.合理评估是否使用 压缩数据
+
+8.创建表时，带有[`--sql_mode=NO_ENGINE_SUBSTITUTION`](https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_sql_mode) ，当数据库不支持引擎会报错（而不是使用默认替代） 
+
+show engines;   查看支持的引擎
+
+**3.事务** ACID
+
+原子性   涉及InnoDB事务  1.autocommit 设置 2.commit 3.rollback
+
+一致性    1.double write 缓冲区  2. InnoDB 崩溃恢复
+
+隔离性	事务的隔离级别  1.autocommit 设置 2.事务隔离级别 set transaction 级别 3. InnoDB 锁 底层实现
+
+持久性   取决于mysql 跟底层硬件的交互
+
+**4.架构**
+
+![image-20210526163147963](https://gitee.com/lifutian66/img/raw/master/img/image-20210526163147963.png)
+
+分为在内存中的 和 在磁盘 中的两部分
+
+**IN  MEMORY**
+
+```
+1.buffer pool   数据缓存区，在专用服务器上一般分配80%物理内存  ，底层实现 一个以页为元素的链表 （a linked list of pages）,使用LRU 算法管理内存,如下
+	图,3/8 即将淘汰的列表，随着新增缓存，向后移，淘汰
+```
+
+![image-20210526171316858](https://gitee.com/lifutian66/img/raw/master/img/image-20210526171316858.png)
+
+```
+2.change buffer  当二级索引页不在buffer pool中，change buffer 记录这些DML更改，buffer pool 在以后会合并这些更改---称为merge，将buffer pool和   change buffer 刷新到磁盘--称为purge，如下图
+  1.二级索引 通常是非唯一的，其插入相对随机，合并缓存的更改避免从磁盘再次大量随机访问
+  2.随后刷新到磁盘 避免了直接大量内存占用，因 change buffer是系统表空间的一部分，不会影响其丢失数据
+```
+
+![image-20210526172239284](https://gitee.com/lifutian66/img/raw/master/img/image-20210526172239284.png)
+
+```
+3.Adaptive Hash Index  自适应哈希  内存中基于key的缓存，InnoDB发现查询可以从构建哈希索引中受益，那么就会建
+4.Log Buffer 其数据会被定期 刷进磁盘 默认大小为16MB innodb_log_buffer_size 控制大小
+
+```
+
+**ON-Disk**
+
+1.table
+
+2.index
+
+​	聚簇索引并不是单独的索引，是数据存储方式（聚簇 数据行和相邻的键紧凑的存储在一起，InnoDB（主键/第一个唯一非空索引/隐式定义主键）  数据在叶子结	点，索引在父辈节点） 主键随机id 会导致索引 变长 产生页分裂和空间碎片，InnoDB聚簇索引还是 尽量使用顺序插入 递增的主键  
+
+​	![image-20210526095017243](https://gitee.com/lifutian66/img/raw/master/img/image-20210526095017243.png)
+
+
+
+`InnoDB` 索引是[B树](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_b_tree)数据结构。空间索引使用 [R树](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_r_tree)
+
+二级索引保存的数据是 主键和二级索引值，然后依据此主键在聚簇索引中查找 row，这个过程称为回表
+
+索引构建分成三个阶段：
+
+​	1.扫描[聚簇索引](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_clustered_index)，并生成索引 并将其添加到排序缓冲区 当[排序缓冲区](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_sort_buffer)已满时，将对条目进行排序并将其写到临时中间文件中
+
+​	2.将一个或多个 临时中间文件 中的所有条目执行合并排序
+
+​	3.已排序的条目插入 [B-tree中](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_b_tree)
+
+3.tablespaces
+
+1. System Tablespace
+
+   5.7这个区域还包含doublewrite buffer+undo logs+change buffer+InnoDB Data Dictionary
+
+   8.0 之后  change buffer+  doublewrite buffer
+
+   8.0.20之后就只剩下 change buffer
+
+2. File-Per-Table Tablespaces
+
+    **innodb 默认**
+
+    单个表索引和数据存储的单独文件，`文件以表（`*`table_name`*.ibd`）命名，表文件表空间支持动态（DYNAMIC)和压缩（commpressed)行格式
+
+3. General Tablespaces
+
+    类似System Tablespace 是共享表空间，create tablespace 创建的共享表空间，可以创建于mysql数据目录外的其他表空间，可容纳多个表 
+
+    支持所有的行格式
+
+4. Undo Tablespaces
+
+   存储undo logs，默认创建两个undo tablespace 为 sql执行 rollback 服务，默认在 data directory ，名字是undo_001` and `undo_002， undo tablespace   
+
+   names 在data dictionary 是  innodb_undo_001` and `innodb_undo_002 
+
+   16KB page size  ，undo tablespace file size is 10MB
+
+    8.0.23 之后 有四个  extents （区/簇），每个最小16MB
+
+5. Temporary Tablespaces
+
+   临时表空间       --- 	会话临时表空间 和 全局临时表空间
+
+   会话临时表空间---     用户创建的临时表 和  InnoDB 优化程序创建的内部临时表
+
+   全局临时表空间--- 	用户创建的临时表的 rollback segments
+
+4.doublewrite buffer
+
+​		保证数据可靠性，server崩溃，写入数据未完，恢复时，从doublewrite buffer 中数据是完整要写的数据副本，
+
+​		redo只能加上旧、校检完整的数据页恢复一个脏块，不能修复坏掉的数据页
+
+​		尽管数据写两次，但是不需要两倍的数据开销，只需要调用一次fsync()即可将大数据顺序写入
+
+​		8.0.20 之后就单独存储在doublewrite files  之前是在 System Tablespace
+
+5.redo log
+
+​		基于磁盘的数据结构，在崩溃恢复期间用于纠正不完整事务写入的数据
+
+6.undo log
+
+​		存储在undo log segments, undo log 与单个读写事务关联
+
+###### **2.MyISAM** 存储引擎
+
+5.1 以及之前版本的 默认引擎。全文索引，压缩、空间函数等  不支持事务和 行级锁，崩溃之后 无法恢复    
+
+使用： 对于只读数据，或者表比较小 可以忍受 修复操作 
+
+存储：将表存储在两个文件中 .MYD（数据文件）  .MYI（索引文件） 为扩展名
+
+表锁
+
+索引：对BLOB 和TEXT 等长字段 也可以基于其前500个字符 创建索引，支持全文索引，基于分词创建的索引 ，可以延迟更新索引键，写入内存，在清理键缓冲区或者关闭表 时，对对应的索引块写入到磁盘，提高效率，但是崩溃 无法修复
+
+压缩表： 对于只读数据、索引，采用压缩表减少 减少磁盘I/O   
+
+性能问题：表锁
+
+###### **3.Archive引擎**
+
+只支持SELECT 和INERT  在mysql5.1 之前不支持 索引， 缓存所有的写 用zlib 对插入进行压缩，比MyISAM 表的磁盘I/O更少， 但每次查询都需要全表查询，适合日志和数据采集  
+
+支持行级锁和专用缓冲区  在其查询返回之前 会阻止其他SELECT   以实现一致性读  也实现了批量插入在完成之前 对读操作 不可见 ，类似mvcc 和事务 是一个针对 插入和压缩做了优化的简单引擎
+
+###### **4.Blackhole引擎**
+
+没有任何存储机制，丢弃所有插入数据，记录Blackhole表的日志，可用于复制数据到备库，或者只是简单记录到日志，在特殊复制架构或者日志审核发挥作用
+
+###### **5.CSV引擎**
+
+不支持 索引，表=csv文件
+
+###### **6.Memory引擎**
+
+快速查询，使用memory表，重启之后只有表 没数据，支持hash 索引，支持表级锁，并发写入性能较低 
+
+###### **7.Infobright 引擎**
+
+面向列存储、
+
+##### 2.lock
+
+###### 1.共享锁排它锁
+
+InnoDB 标准的行级锁 S锁和X锁
+
+A [shared (`S`) lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_shared_lock) 
+
+An [exclusive (`X`) lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_exclusive_lock) 
+
+###### 2.意向锁
+
+为了防止表锁和行锁冲突，产生的全表扫描，意向锁是表级锁 
+
+An [intention shared lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_intention_shared_lock) (`IS`)
+
+An [intention exclusive lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_intention_exclusive_lock) (`IX`)  
+
+获取 A [shared (`S`) lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_shared_lock)  需要 先获取IS 或 IX
+
+获取 An [exclusive (`X`) lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_exclusive_lock)  需要先获取 `IX`
+
+###### 3.行锁
+
+锁定 index record 
+
+###### 4.间隙锁 (开区间)
+
+索引记录之间的间隙的锁定,或者是对第一个或最后一个索引记录之前的间隙的锁定,唯一索引的不需要使用间隙锁 （不包括 多列唯一所引）,
+
+主键/唯一索引 使用行锁
+
+transaction A gap S-lock 和 transaction B  gap X-lock  可以在同一个 gap  如果 一条记录 purged，   transactions must be merged
+
+间隙锁 只是为了防止 inserting to the gap ，一个事务持有间隙锁不会 排斥其他 事务持有 间隙锁，
+
+当事务隔离级别 是  [`READ COMMITTED`](https://dev.mysql.com/doc/refman/8.0/en/innodb-transaction-isolation-levels.html#isolevel_read-committed) ，间隙锁对于 索引扫描和查找 是禁止的，仅用于外键约束检查和重复键检查
+
+###### 5.next-key 锁  (左开右闭区间]
+
+行锁和间隙锁的结合 ，锁定是索引记录 加上索引记录之前的间隙 
+
+在默认隔离级别，`InnoDB`使用next-key锁定进行搜索和索引扫描，以防止产生幻 读
+
+###### 6.插入意向锁
+
+​         insert 操作的 gap lock，在多事务同时写入不同数据至同一索引间隙的时候，并不需要等待其他事务完成，不会发生锁等待，假设有一个记录索引包含键值4
+
+   和7，不同的事务分别插入5和6，每个事务都会产生一个加在4-7之间的插入意向锁，获取在插入行上的排它锁，但是不会被互相锁住，因为数据行并不冲突。
+
+###### 7.自动锁`AUTO-INC`锁
+
+​	表级锁 `AUTO_INCREMENT`列
+
+[`innodb_autoinc_lock_mode`](https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_autoinc_lock_mode) 变量控制用于自动增量锁定的算法。它允许您选择如何在可预测的自动增量值序列和插入操作的最大并发之间进行权衡。
+
+该变量 值有 0、1、2  分别表示 传统、连续、交错   1为默认值
+
+0 所有的insert 语句获取一个 auto_inc lock 在语句结束时 才会释放该锁    语句级，保证了基于语句复制的安全
+
+1 可以一次生成几个连续的值 auto_inc  lock  不会一直保持到语句的结束，只要 语句得到了相应的值后就可以提前释放锁
+
+2 已经不是auto_inc  lock  性能是最好的 但是对于一个insert 得到的 id 可能不是连续的
+
+###### 8.空间索引的谓词锁
+
+##### 2.事务
+
+###### 1.模型
+
+InnoDB 事务模型 旨在 结合 传统的两段式锁 在**多版本数据库** 上的高效处理，不需要锁升级，InnoDB 锁信息占用资源很少
+
+###### 2.隔离级别
+
+- READ UNCOMMITTED  未提交读
+
+  **脏读**
+
+- READ COMMITTED 提交读 
+
+  每个无锁读根据自己查询时间，**一致性读取**查询快照信息，对于有锁读，只锁定索引记录，不锁定间隙，间隙锁定仅用于外键约束检查和重复键检查，会产生**不可重复读**，同一事务里的相同查询 在不同时间查询 可能结果不一致
+
+- REPEATABLE READ 可重复读
+
+  InnoDB 默认事务隔离级别, 无锁采用**一致性读取**（若更改根据**undo log**重构数据），同一事务查询根据第一个查询的时间为准查询快照，其快照读并不支持在同一事务中有DML 操作，会产生**幻读**，有锁读根据查询范围（行锁/  间隙锁、next key锁）锁定数据
+
+- SERIALIZABLE 串行化 （加锁读）
+
+  所有的普通查询会隐式转换 **有锁读**
+
+SET TRANSACTION ISOLATION LEVEL命令来设置隔离级别
+
+##### 3.事务提交回滚
+
+SET autocommit  禁用或启用当前会话的默认自动提交模式 
+
+START TRANSACTION  /  BEGIN  开始事务
+
+COMMIT 手动提交
+
+ROLLBACK 回滚当前事务
+
+##### 4.一致性非锁定读
+
+使用版本控制查询快照，但是在同一事务中一致性非锁定读并不适用于 ddl语句，使用ddl之后，读取的都是新的结果
+
+mvcc 版本控制，通过保存数据在某个时间点的快照来实现的，也就是说不管需要执行 多长时间，每个事务看到的数据都是一样的， 根据事务开始时间不同，每个事务对同一个表，同一时刻看到的数据可能不一样的
+
+##### 5.锁定读
+
+`SELECT ... FOR SHARE`
+
+`SELECT ... FOR UPDATE`
+
+NOWAIT  使用`NOWAIT`从不等待获取行锁的锁定读取。查询立即执行，如果请求的行被锁定，则会失败并显示错误。
+
+SKIP LOCKED  使用`SKIP LOCKED` 从不等待获取行锁的锁定读取。查询立即执行，从结果集中删除锁定的行。
+
+NOWAIT、SKIP LOCKED 均是 行锁
+
+
+
+**持久性**
+
+事务实现：采用事务日志帮助事务提高效率，存储引擎修改表的数据时，只需要修改其内存拷贝，再把该修改行为记录到持久的硬盘上的事务日志中，而不是去修改数据本身持久到磁盘，事务日志采用的是追加方式，写日志的操作是磁盘上的一块区域内顺序I/O，事务日志持久以后，内存中被修改的数据在后台慢慢的刷回磁盘，预写式日志，修改数据需要写两次磁盘
+
+
+
+mysql提供了 两种事务型的存储引擎：InnoDB和NDB Cluster 另外还有一些第三方存储引擎也支持事务，比较知名的包括XtraDB和PBXT。
+
+
+
+ddl 尽量不要使用混合存储引擎，非事务式引擎不会回滚，造成不一致，
+
+
+
+mysql默认采用自动提交模式，除非显示声明开始一个事务
+
+
+
+mvcc 版本控制，通过保存数据在某个时间点的快照来实现的，也就是说不管需要执行 多长时间，每个事务看到的数据都是一样的， 根据事务开始时间不同，每个事务对同一个表，同一时刻看到的数据可能不一样的。 乐观并发控制和悲观并发控制，只在REPEATABLE READ和READ COMMITTED 隔离级别下工作，其他不兼容
+
+InnoDB mvcc 通过每行数据后面保存两个隐藏列来实现， 创建时间+过期时间（删除时间）  这里的时间 并不是真正时间 而是系统版本号，事务开始时刻的版本号，自动递增的，在REPEATABLE READ  重复读 隔离级别下，mvcc
+
+1.SELECT      ①InnoDB 只查版本号早于（大小于等于）当前事务版本的数据行 ② 删除版本号 大于当前版本号的
+
+2.INSERT       插入时 保存版本号
+
+3.DELETE      删除时 保存版本号
+
+4.UPDATE   新插入一行 并保存版本号，删除 原来的数据行，并更新版本号
+
+
+
+##### 3.索引
+
+###### 1.**类型：**  
+
+**B-Tree 索引**    按照顺序存储   用于查找和排序
+
+底层实现：InnoDB B+Tree      NDB T-Tree 
+
+优化：MyISAM使用前缀压缩技术使得索引更小      InnoDB  按照原数据格式进行存储
+
+B-Tree索引 比较节点页的值和要查找的值 找到合适的指针进入下层子节点，这些指针实际上定义了子节点页中值的上下限  叶子结点 指针指向数据 
+
+![image-20210525181757228](https://gitee.com/lifutian66/img/raw/master/img/image-20210525181757228.png)
+
+
+
+适用于： 全键值、键值范围、键前缀查找（最左前缀）
+
+**哈希索引**
+
+基于hash表实现，只有精确匹配才会有效，针对每行数据对所有索引列计算一个hash code，为该数据的key， value为指向数据行的指针 
+
+Memory 默认索引，非唯一索引，重复 链表存储
+
+无法排序 范围查找 只支持等值比较  hash冲突会影响性能
+
+InnoDB 自适应hash 就是为了查找更快  当然也可以自己维护 创建额外列  自定义hash函数 维护 索引值
+
+**空间数据索引** R-Tree
+
+地理数据存储  mysqlGIS 支持不完善
+
+**全文索引**
+
+查询文本中关键词  适用MATCH  AGAINST 操作
+
+**其他索引**
+
+聚簇索引、覆盖索引等等
+
+###### 2.**优点**：
+
+1.减少扫描数量
+
+2.随机IO变成顺序I/O
+
+3.避免排序和临时表
+
+###### 3.高效使用
+
+1.独立的列 索引列不能成为表达式/函数的一部分
+
+2.索引列值过长 可以考虑 使用hash索引、前缀索引  select count(DISTINCT left(字段,前缀长度)/count(*)  前缀的选择性能够接近0.031，基本上就可用了
+
+3.多列索引   复合索引 需要考虑 实际使用 情况  （考虑顺序）  AND OR 
+
+4.聚簇索引并不是单独的索引，是数据存储方式（聚簇 数据行和相邻的键紧凑的存储在一起，InnoDB（主键/第一个唯一非空索引/隐式定义主键）  数据在叶子结点，索引在父辈节点） 主键随机id 会导致索引 变长 产生页分裂和空间碎片，InnoDB聚簇索引还是 尽量使用顺序插入 递增的主键  
+
+​	![image-20210526095017243](https://gitee.com/lifutian66/img/raw/master/img/image-20210526095017243.png)
+
+5.覆盖索引  索引中已经包含（覆盖）查询的数据，那么就没必要回表查询了,那么覆盖索引必须包含值 mysql 也就是   B-Tree
+
+​	可用 延迟关联（延迟对列的查询，先使用覆盖索引） 使用覆盖索引
+
+6.索引扫描做排序  满足最左前缀（前面字段是常量 这种也能满足），关联多表order by 字节引用字段全部为第一个表
+
+7.压缩（前缀压缩）索引 MyISAM 默认使用前缀压缩索引减少索引的大小，默认只压缩字符串，原理：保存索引块中的第一个值，然后其他值跟这个值比较 保存	差异，第一个是 perform  第二个是 performance 那么第二个前缀压缩存储 为 7,ance MyISAM 对行指针也采用类似压缩，代价是某些操作变慢，因为每个值的    	压缩前缀都依赖前面的值，所以查找无法使用二分法，只能从头扫描，正序速度还不错，倒序就很差，在块中查找一行的操作平均需要扫描半个索引快
+
+8.冗余和重复索引   在一个列上可重复创建多个索引，mysql会单独维护，避免创建重复索引，mysql唯一限制和主键限制都是通过索引实现的
+
+9.索引查询会减少锁定的行， InnoDB在二级索引上使用共享（读）锁，但访问主键索引需要排他（写）锁。
+
+
+
+##### 4.测试
+
+1.吞吐量  单位时间处理的数量   TPC-C
+
+2.延迟  测试任务所需整体时间
+
+3.并发性
+
+4.可扩展性 
+
+##### 5.使用
+
+**类型**
+
+1.使用正确存储数据的**最小数据类型**   （简单数据类型占用较少磁盘、内存和CPU缓存，处理需要CPU周期更少）
+
+2.尽量**避免nul**l  null使得 索引、索引统计和值都比较复杂，使用更多的存储空间，MyISAM 固定大小的索引变成 可变大小的
+
+3.整数类型 TINYINT  SMALLINT MEDIUMINT INT BIGINT 8 16 24 32 64位存储 -2^(N-1)至2^(N-1)-1 无符号0-2^(N) INT(1) 和INT(20) 存储和计算都一样
+
+4.实物(小数) FLOAT 4个字节 DOUBLE 8个字节 DECIMAL 二进制字符串 每四个字节存 9个数字（2^31 大致是10位数）
+
+5.**字符串** 跟存储引擎相关 非定长的 需要**额外字段记录长度**，update变长 InnoDB 分裂页 MyISAM 将行拆成不同片段存储,比数字小号空间多 查询慢（MyISAM 默认对字符串使用压缩碎银 导致查询慢）
+
+6.char 固定长度 空格填充 
+
+7.BLOB和TEXT类型 二进制 字符 存储  没有排序规则或字符集 和 有 排序规则或字符集
+
+8.**ENUM 实际存储为整数** ，可查询其双重属性，其排序是按 内部存储的整数， 枚举与char/varchar 关联会很慢
+
+9.时间类型  **DATETIME** 范围大 1001年到9999年 精确到秒 存储 YYYYMMDDHHMMSS 整数 与时区无关，8个字节
+
+​	**TIMESTAMP** 1970年到2038年 4个字节，有时区  默认设置为当前时间
+
+10.位数据类型 mysql 将其当做字符串来处理  set 当做数字处理
+
+schema 设计
+
+1.**不要太多列**    服务器层和存储引擎层 通过缓冲数据拷贝数据，然后在服务器层将缓冲内容解码成各个列（MyISAM 非定长行和InnoDB），列再转行
+
+2.**不要太多关联** 最多支出61张表 但是最好限制在12个表以内
+
+3.**注意防止过度使用枚举**  set类似枚举
+
+4.NULL 确实需要 也是可以的 并**非一定要避免使用NULL** 
+
+5.ALTER TABLE 操作 mysql 执行大部分修改表结构操作：用新的结构创建个新表，把数据导入，然后删除旧表   当然也有例外： 
+
+​				1.修改列的默认值 ALTER COLUMN 只修改.frm文件 不涉及表数据
+
+​				2.移除一个列的AUTO_INCREMENT属性
+
+​				3.增加、移除、更改ENUM和SET的可选值
+
+​			也可以手替换.frm 文件
+
+6.MyISAM 高效导入数据，先禁用索引，导入数据 再启用索引，构建索引工作延迟到数据载入后，可通过排序构建索引 速度快而且索引树碎片更少 更紧凑
+
+​	InnoDB 也可以有类似 先删除索引  导入数据 在创建索引
+
+##### 6.原理
+
+查询过程：
+
+![image-20210526141007314](https://gitee.com/lifutian66/img/raw/master/img/image-20210526141007314.png)
+
+1.mysql 客户端/服务之间的通信息以是半双工的，任何时刻只能由一方发送，另一方等待
+
+
+
+### 7.Redis 
 
 #### 1.数据结构
 
