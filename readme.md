@@ -2618,13 +2618,34 @@ static class BinaryTree {
 
 ### 6.数据库
 
+数据库： 物理操作系统文件或其他形式文件类型的集合
+
+实例：后台线程和一个共享内存区域的组合
+
+集群情况下，一个数据库对应多个实例，其他都是一一对应
+
 #### 1.mysql
+
+配置详解：
+
+1. 配置文件位置
+
+   mysql可以没有配置文件，会读取默认参数设置启动实例，mysql有几个默认读取配置文件的位置，按优先级读取，
+
+   1 /etc/my.cnf   2  /etc/mysql/my.cnf  3/user/local/mysql/etc/my.cnf   4~/.my.cnf 
+
+   当多个配置文件配置同一个参数，那么会以最后读取到配置文件中的配置为准
+
+2. 数据存储位置
+
+   datadir 默认是在 /user/local/mysql/data , 可通过执行 SHOW VARIABLES LIKE '%datadir%'; 语句查看目录
+
 
 数据库是文件的集合，是依照某种数据模型组织起来并存放于二级存储器中的数据集合
 
 ![6401](https://gitee.com/lifutian66/img/raw/master/img/6401.png)
 
-mysql 整体架构，查询缓存，解析器，优化器，存储引擎，详细如下：
+mysql 整体架构，连接池组件、管理服务和工具组件、sql接口组件、查询分析组件、优化组件、缓存组件、插件形式存储引擎，物理文件，详细如下：
 
 ![image-20210526143228334](https://gitee.com/lifutian66/img/raw/master/img/image-20210526143228334.png)
 
@@ -2632,7 +2653,17 @@ mysql 整体架构，查询缓存，解析器，优化器，存储引擎，详�
 
 ##### 1.存储引擎
 
+各种引擎对比：
+
+![image-20210810093941935](https://gitee.com/lifutian66/img/raw/master/img/image-20210810093941935.png)
+
+可在数据库 information_schema 表 ENGINES  查看支持的引擎，也可执行 SHOW ENGINES; 查看支持引擎 
+
+![image-20210810094310528](https://gitee.com/lifutian66/img/raw/master/img/image-20210810094310528.png)
+
 ###### **1.InnoDB** 存储引擎 
+
+设计的目的面向在线事务处理
 
 **1.优点**：1.支持事务 崩溃恢复
 
@@ -2654,7 +2685,7 @@ mysql 整体架构，查询缓存，解析器，优化器，存储引擎，详�
 
 5.不要使用 LOCK TABLES 语句，替换使用 SELECT ..  FOR UPDATE 替代
 
-6.启用  innodb_file_per_table   将表的数据和索引放入单独的文件中，而不是系统表空间中
+6.启用  innodb_file_per_table   将表的数据和索引放入单独的文件中，而不是系统表空间中，默认就是
 
 7.合理评估是否使用 压缩数据
 
@@ -2674,30 +2705,152 @@ show engines;   查看支持的引擎
 
 **4.架构**
 
+整体：
+
+![ ](https://gitee.com/lifutian66/img/raw/master/img/image-20210810101345928.png)
+
+后台线程：
+
+​	1.Master Thread 核心线程负责 将缓存中的数据异步刷新到磁盘，包括脏页的刷新、合并插入缓存
+
+​	2.IO Thread 使用AIO,负责AIO的回调， write、read、insert buffer、log IO thread
+
+​	3.Purge Thread  事务提交后，undo log回收
+
+**5.7版本**
+
+![](https://dev.mysql.com/doc/refman/5.7/en/images/innodb-architecture.png)
+
+**8.0版本**
+
 ![image-20210526163147963](https://gitee.com/lifutian66/img/raw/master/img/image-20210526163147963.png)
 
 分为在内存中的 和 在磁盘 中的两部分
 
 **IN  MEMORY**
 
-```
-1.buffer pool   数据缓存区，在专用服务器上一般分配80%物理内存  ，底层实现 一个以页为元素的链表 （a linked list of pages）,使用LRU 算法管理内存,如下
-	图,3/8 即将淘汰的列表，随着新增缓存，向后移，淘汰
+数据库页读取  读取先判断是否在缓存池中，命中返回，否则读取磁盘到缓存池，返回
+
+数据库页修改  先修改缓存池中的页，以一定频率（Checkpoint）刷新到磁盘
+
+可修改 `innodb_buffer_pool_size` 大小更改缓存池的大小，16GB内存的机器，默认是8M
+
+可修改 `innodb_buffer_pool_instances` 大小更改缓存池的个数 默认是1
+
+InnoDB 内存中的结构情况：
+
 ```
 
-![image-20210526171316858](https://gitee.com/lifutian66/img/raw/master/img/image-20210526171316858.png)
+1.buffer pool   数据缓存区，在专用服务器上一般分配80%物理内存  ，底层实现 一个以页为元素的链表 （a linked list of pages）,使用LRU 算法管理内存,如下
+	图:
+	
+ 	从磁盘中读取页，并不是直接放入到**LRU列表**首部，而是放在LRU midpoint位置，默认就是5/8 处，可修改`innodb_old_blocks_pct`参数，调整其默认值是 37，也就是37%位置，差不多3/8处，midpoint之后是old 列表，否则就是new 列表
+
+   midpoint 的位置 防止活跃热点数据被刷出缓存池，可以修改 `innodb_old_blocks_time`, 表示页读取到midpoint 位置前（new 列表），需要多少次
+
+   数据库初始化时，LRU列表是空的，这些也都存在 **free list**（链表） 列表中. 当需要从缓存池中分页，首先看free list 是否有可用的空闲页，有的话，从free   
+
+   list删除，放到LRU列表，否则淘汰LRU列表末尾的页。分配给新的页
+
+	old 到  new   称为 Pages made young  
+
+	new 到 old  称为   Page not made young /   not young
+
+    sql SHOW ENGINE INNODB STATUS
+    以查看当前 INNODB 状态
+
+----------------------
+BUFFER POOL AND MEMORY
+----------------------
+Total large memory allocated 8568832
+Dictionary memory allocated 480267
+Buffer pool size   512      
+Free buffers       236
+Database pages     270
+Old database pages 0
+Modified db pages  0
+Pending writes: LRU 0, flush list 0, single page 0
+Pages made young 0, not young 0
+0.00 youngs/s, 0.00 non-youngs/s
+Pages read 4949, created 265, written 1190
+0.00 reads/s, 0.00 creates/s, 0.00 writes/s
+Buffer pool hit rate 933 / 1000, young-making rate 0 / 1000 not 0 / 1000
+Pages read ahead 0.00/s, evicted without access 0.00/s, Random read ahead 0.00/s
+LRU len: 256, unzip_LRU len: 0
+I/O sum[103]:cur[0], unzip sum[0]:cur[0]
+​```
+
+Buffer pool  512页  大小为  512*16k =8M
+
+Free buffers  236页     空闲列表
+
+Database pages  270页 表示LRU列表中的数量 
+
+Modified db pages   0 表示**脏页**（LRU列表中页数据被修改了）的数量， 字段 OLDEST_MODIFICATION>0的
+
+Pages made young 0     old 到  new
+
+not young 0     new 到 old
+
+Buffer pool hit rate  表示 缓存池命中几率，通常小于95% 可能是因为全表扫描导致的LRU列表污染
+
+LRU len: 256, unzip_LRU len: 0  表示非压缩  压缩的页  ，LRU列表包含 unzip_LRU ，其内存分配是伙伴算法 根据大小查找，没有的话查找大的，分裂给其使用，否则继续找大的
+
+可通过表  INNODB_BUFFER_PAGE_LRU  查看每个页的信息
+
+数据刷新回磁盘的列表是 **flush 列表** 其中都是脏页，脏页既存在于LRU列表，也存在flush 列表	
+```
+
+![内容在周围的文本中描述。](https://gitee.com/lifutian66/img/raw/master/img/innodb-buffer-pool-list.png)
+
+
+
+   
+
+
 
 ```
 2.change buffer  当二级索引页不在buffer pool中，change buffer 记录这些DML更改，buffer pool 在以后会合并这些更改---称为merge，将buffer pool和   change buffer 刷新到磁盘--称为purge，如下图
   1.二级索引 通常是非唯一的，其插入相对随机，合并缓存的更改避免从磁盘再次大量随机访问
-  2.随后刷新到磁盘 避免了直接大量内存占用，因 change buffer是系统表空间的一部分，不会影响其丢失数据
+  2.随后刷新到磁盘 避免了直接大量内存占用，内存上change buffer 是 buffer pool的一部分，在磁盘上change buffer是系统表空间的一部分，不会影响其丢失数据
+  
+ change buffer 缓存内容可由  innodb_change_buffering 变量控制 
+ all  默认值  插入 删除标记  缓存区物理删除
+ none 	  不缓存任何
+ inserts  只缓存插入
+ deletes  只缓存删除标记
+ changes  插入、 删除标记
+ purges   缓存区物理删除
+ 
+ innodb_change_buffer_max_size  可调整change_buffer 在buffer pool中的占用内存比率 默认是  25 最大是50
+ 
+ 以下为change buffer 信息
+ Ibuf: size 1, free list len 0, seg size 2, 0 merges
+merged operations:
+ insert 0, delete mark 0, delete 0
+discarded operations:
+ insert 0, delete mark 0, delete 0
+ 
+ 当有哪个词语不懂可以查  SELECT NAME, COMMENT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME LIKE '%Ibuf%'
+ Ibuf: change buffer 大小 单位为 页
+ merged  insert：插入记录被 merged 的数量
+ discarde insert ：丢弃的插入合并操作 的数量
+ delete mark 删除标记
+ 
+ 
+ 
 ```
 
-![image-20210526172239284](https://gitee.com/lifutian66/img/raw/master/img/image-20210526172239284.png)
+![内容在周围的文本中描述。](https://gitee.com/lifutian66/img/raw/master/img/innodb-change-buffer.png)
 
 ```
 3.Adaptive Hash Index  自适应哈希  内存中基于key的缓存，InnoDB发现查询可以从构建哈希索引中受益，那么就会建
-4.Log Buffer 其数据会被定期 刷进磁盘 默认大小为16MB innodb_log_buffer_size 控制大小
+
+4.Log Buffer 其数据会被定期 刷进磁盘 默认大小为16MB innodb_log_buffer_size 控制大小 默认1M
+  触发：1.Master Thread 每一秒   2.每个事务提交  3.当该缓存区空间小于 1/2 
+  
+
+Free buffers+ Database pages  + 自适应hash +Lock + INSERT BUFF 等 = Buffer pool size
 
 ```
 
@@ -2785,7 +2938,7 @@ show engines;   查看支持的引擎
 
 ###### **2.MyISAM** 存储引擎
 
-5.1 以及之前版本的 默认引擎。全文索引，压缩、空间函数等  不支持事务和 行级锁，崩溃之后 无法恢复    
+5.1 以及之前版本的 默认引擎。全文索引，压缩、空间函数等  ，不支持事务、表锁、行级锁，崩溃之后 无法恢复   ，其缓冲池之缓存 索引文件，而不缓冲数据文件，其存储引擎的表是有MYD 和MYI 组成，MYD存储数据文件，MYI存储索引文件
 
 使用： 对于只读数据，或者表比较小 可以忍受 修复操作 
 
@@ -2799,9 +2952,11 @@ show engines;   查看支持的引擎
 
 性能问题：表锁
 
+比较适合 ETL操作
+
 ###### **3.Archive引擎**
 
-只支持SELECT 和INERT  在mysql5.1 之前不支持 索引， 缓存所有的写 用zlib 对插入进行压缩，比MyISAM 表的磁盘I/O更少， 但每次查询都需要全表查询，适合日志和数据采集  
+只支持SELECT 和INERT  在mysql5.1 支持 索引， 缓存所有的写 用zlib 对插入进行压缩，压缩比1:10 ，比MyISAM 表的磁盘I/O更少， 但每次查询都需要全表查询，适合日志和数据采集  
 
 支持行级锁和专用缓冲区  在其查询返回之前 会阻止其他SELECT   以实现一致性读  也实现了批量插入在完成之前 对读操作 不可见 ，类似mvcc 和事务 是一个针对 插入和压缩做了优化的简单引擎
 
@@ -2815,11 +2970,13 @@ show engines;   查看支持的引擎
 
 ###### **6.Memory引擎**
 
-快速查询，使用memory表，重启之后只有表 没数据，支持hash 索引，支持表级锁，并发写入性能较低 
+快速查询，使用memory表，重启之后只有表 没数据，非常适合存储临时数据的临时表，以及数仓中的维度表，支持hash 索引 默认也是hash索引，只支持表级锁，并发写入性能较低 不支持 TEXT 和BLOB 类型
 
 ###### **7.Infobright 引擎**
 
-面向列存储、
+面向列存储
+
+
 
 ##### 2.lock
 
@@ -2893,6 +3050,8 @@ transaction A gap S-lock 和 transaction B  gap X-lock  可以在同一个 gap  
 
 InnoDB 事务模型 旨在 结合 传统的两段式锁 在**多版本数据库** 上的高效处理，不需要锁升级，InnoDB 锁信息占用资源很少
 
+mysql提供了 两种事务型的存储引擎：InnoDB和NDB Cluster 另外还有一些第三方存储引擎也支持事务，比较知名的包括XtraDB和PBXT。
+
 ###### 2.隔离级别
 
 - READ UNCOMMITTED  未提交读
@@ -2913,7 +3072,11 @@ InnoDB 事务模型 旨在 结合 传统的两段式锁 在**多版本数据库*
 
 SET TRANSACTION ISOLATION LEVEL命令来设置隔离级别
 
-##### 3.事务提交回滚
+###### 3.**持久性**
+
+事务实现：采用事务日志帮助事务提高效率，存储引擎修改表的数据时，只需要修改其内存拷贝，再把该修改行为记录到持久的硬盘上的事务日志中，而不是去修改数据本身持久到磁盘，事务日志采用的是追加方式，写日志的操作是磁盘上的一块区域内顺序I/O，事务日志持久以后，内存中被修改的数据在后台慢慢的刷回磁盘，预写式日志，修改数据需要写两次磁盘
+
+###### 4.事务提交回滚
 
 SET autocommit  禁用或启用当前会话的默认自动提交模式 
 
@@ -2923,45 +3086,11 @@ COMMIT 手动提交
 
 ROLLBACK 回滚当前事务
 
-##### 4.一致性非锁定读
+###### 5.一致性非锁定读
 
 使用版本控制查询快照，但是在同一事务中一致性非锁定读并不适用于 ddl语句，使用ddl之后，读取的都是新的结果
 
 mvcc 版本控制，通过保存数据在某个时间点的快照来实现的，也就是说不管需要执行 多长时间，每个事务看到的数据都是一样的， 根据事务开始时间不同，每个事务对同一个表，同一时刻看到的数据可能不一样的
-
-##### 5.锁定读
-
-`SELECT ... FOR SHARE`
-
-`SELECT ... FOR UPDATE`
-
-NOWAIT  使用`NOWAIT`从不等待获取行锁的锁定读取。查询立即执行，如果请求的行被锁定，则会失败并显示错误。
-
-SKIP LOCKED  使用`SKIP LOCKED` 从不等待获取行锁的锁定读取。查询立即执行，从结果集中删除锁定的行。
-
-NOWAIT、SKIP LOCKED 均是 行锁
-
-
-
-**持久性**
-
-事务实现：采用事务日志帮助事务提高效率，存储引擎修改表的数据时，只需要修改其内存拷贝，再把该修改行为记录到持久的硬盘上的事务日志中，而不是去修改数据本身持久到磁盘，事务日志采用的是追加方式，写日志的操作是磁盘上的一块区域内顺序I/O，事务日志持久以后，内存中被修改的数据在后台慢慢的刷回磁盘，预写式日志，修改数据需要写两次磁盘
-
-
-
-mysql提供了 两种事务型的存储引擎：InnoDB和NDB Cluster 另外还有一些第三方存储引擎也支持事务，比较知名的包括XtraDB和PBXT。
-
-
-
-ddl 尽量不要使用混合存储引擎，非事务式引擎不会回滚，造成不一致，
-
-
-
-mysql默认采用自动提交模式，除非显示声明开始一个事务
-
-
-
-mvcc 版本控制，通过保存数据在某个时间点的快照来实现的，也就是说不管需要执行 多长时间，每个事务看到的数据都是一样的， 根据事务开始时间不同，每个事务对同一个表，同一时刻看到的数据可能不一样的。 乐观并发控制和悲观并发控制，只在REPEATABLE READ和READ COMMITTED 隔离级别下工作，其他不兼容
 
 InnoDB mvcc 通过每行数据后面保存两个隐藏列来实现， 创建时间+过期时间（删除时间）  这里的时间 并不是真正时间 而是系统版本号，事务开始时刻的版本号，自动递增的，在REPEATABLE READ  重复读 隔离级别下，mvcc
 
@@ -2974,6 +3103,38 @@ InnoDB mvcc 通过每行数据后面保存两个隐藏列来实现， 创建时�
 4.UPDATE   新插入一行 并保存版本号，删除 原来的数据行，并更新版本号
 
 
+
+###### 6.锁定读
+
+`SELECT ... FOR SHARE`
+
+`SELECT ... FOR UPDATE`
+
+NOWAIT  使用`NOWAIT`从不等待获取行锁的锁定读取。查询立即执行，如果请求的行被锁定，则会失败并显示错误。
+
+SKIP LOCKED  使用`SKIP LOCKED` 从不等待获取行锁的锁定读取。查询立即执行，从结果集中删除锁定的行。
+
+NOWAIT、SKIP LOCKED 均是 行锁
+
+###### 7.不同sql的锁
+
+- SELECT ...... FROM  一致性读，读的是快照。除非隔离级别是[`SERIALIZABLE`](https://dev.mysql.com/doc/refman/8.0/en/innodb-transaction-isolation-levels.html#isolevel_serializable) （next-key 唯一索引 是行锁 ,当然也取决与sql的where条件）
+
+- SELECT ... FOR UPDATE and SELECT ... FOR SHARE  一般情况下会使用唯一所引锁定行，释放非锁定行，但是一些情况下并不会立马释放，因为查询结果和原数据可能存会在差异性，例如 union 操作，在评估插入是否符合结果集的条件之前，将insert 插入临时表，在这种情况下，临时表中的行与原始数据中的行关系丢失，后面的行会在查询结束之后才会释放
+
+- [`SELECT`](https://dev.mysql.com/doc/refman/8.0/en/select.html) with `FOR UPDATE` or `FOR SHARE` , [`UPDATE`](https://dev.mysql.com/doc/refman/8.0/en/update.html), and [`DELETE`](https://dev.mysql.com/doc/refman/8.0/en/delete.html) 根据是否使用唯一索引锁定不同，唯一所引锁定行，非唯一索引间隙锁或者next-key锁
+
+- 一致性查询会忽略任何锁
+
+###### 8.死锁检测
+
+InnoDB 默认，当大量线程等待同一个锁时，死锁检测会导致速度减慢 ，可以使用 [innodb_dedicated_server ](https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_dedicated_server)变量禁用死锁检测
+
+死锁默认，锁竞争会采用超时策略
+
+###### 9.事务调度
+
+MySQL 8.0.20 之前，`InnoDB`也是采用先进先出 (FIFO) 算法来调度事务，CATS 算法仅在重锁争用情况下使用。MySQL 8.0.20 中的 CATS 算法增强使 FIFO 算法变得多余，允许将其删除。从 MySQL 8.0.20 开始，先前由 FIFO 算法执行的事务调度由 CATS 算法执行。在某些情况下，此更改可能会影响授予事务锁定的顺序，CATS 算法通过分配调度权重来优先考虑等待事务，该权重是根据事务阻塞的事务数计算的。例如，如果两个事务正在等待对同一个对象的锁定，则阻塞最多事务的事务被分配更大的调度权重。如果权重相等，则优先考虑等待时间最长的事务
 
 ##### 3.索引
 
@@ -3047,19 +3208,7 @@ InnoDB 自适应hash 就是为了查找更快  当然也可以自己维护 创�
 
 9.索引查询会减少锁定的行， InnoDB在二级索引上使用共享（读）锁，但访问主键索引需要排他（写）锁。
 
-
-
-##### 4.测试
-
-1.吞吐量  单位时间处理的数量   TPC-C
-
-2.延迟  测试任务所需整体时间
-
-3.并发性
-
-4.可扩展性 
-
-##### 5.使用
+##### 4.使用
 
 **类型**
 
