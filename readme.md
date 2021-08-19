@@ -137,9 +137,9 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 
    
 
-   ![](https://mmbiz.qpic.cn/mmbiz_png/J0g14CUwaZflJahXjfiaG4OvTA9DA2UibzKwEMKCNn2DoRsgWyvZsfzPARRpvfdc3ywicDNAmVrIFE6icduenBnxgw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
-
    
+
+   ![64撒大声地](https://gitee.com/lifutian66/img/raw/master/img/64%E6%92%92%E5%A4%A7%E5%A3%B0%E5%9C%B0.png)
 
 2. **自旋锁**
 
@@ -171,11 +171,11 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 
    读优先：
 
-   ![](https://mmbiz.qpic.cn/mmbiz_png/J0g14CUwaZflJahXjfiaG4OvTA9DA2UibzGiaX1mvYx5jzfQaYsG9hYbicIzos7M9SkKz0wWMoxBk9RwyguyWwtricA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+   ![640saa](https://gitee.com/lifutian66/img/raw/master/img/640saa.png)
 
    写优先：
 
-   ![图片](https://mmbiz.qpic.cn/mmbiz_png/J0g14CUwaZflJahXjfiaG4OvTA9DA2UibzskMiariaXsTzJYibmXK6vGf9fWOlJI6oSaB0ibBIp40Gia5V0VsWclRvttw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+   ![smssjsj](https://gitee.com/lifutian66/img/raw/master/img/smssjsj.png)
 
    读优先锁对于读线程并发性更好，长时间会导致 写线程「饥饿」
 
@@ -384,7 +384,7 @@ ordinal 返回在枚举中的顺序下标 从0 开始的
 
 ​	java 线程与内存的关系
 
-​	![](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpzhiaXUhn9W2XjuqeziaG1ibdvOgPyiaPib3U7oR6ZS77CqlAVp7BkTxS30UhDN1X6YJRfCGQadBP6xd9Q/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![saaass](https://gitee.com/lifutian66/img/raw/master/img/saaass.png)
 
 ①不同线程之间存在可见性问题
 
@@ -424,7 +424,7 @@ I到 S 会有时间差， 频繁操作导致可见性的结果并不一定准确
 
 读：
 
-![图片](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpzhiaXUhn9W2XjuqeziaG1ibdvaOPHe2KysUlTCphhnkoaacAho6ZFv3F4vaetoGu4dUQcvPn4wicvGwA/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![sadadd](https://gitee.com/lifutian66/img/raw/master/img/sadadd.png)
 
 Volatile 只能保证可见性，有序性， 不能保证原子性
 
@@ -2665,45 +2665,9 @@ mysql 整体架构，连接池组件、管理服务和工具组件、sql接口�
 
 设计的目的面向在线事务处理
 
-**1.优点**：1.支持事务 崩溃恢复
-
-​			2.支持行锁
-
-​			3.数据在磁盘上 是基于 聚簇索引（主键索引）存储
-
 ![image-20210526151036181](https://gitee.com/lifutian66/img/raw/master/img/image-20210526151036181.png)
 
-**2.最佳实践**：
-
-1.指定一个自动递增的主键
-
-2.外键的合理使用
-
-3.关闭自动提交事务
-
-4.使用 多个短期事务，尽量不要一个事务 执行很长时间
-
-5.不要使用 LOCK TABLES 语句，替换使用 SELECT ..  FOR UPDATE 替代
-
-6.启用  innodb_file_per_table   将表的数据和索引放入单独的文件中，而不是系统表空间中，默认就是
-
-7.合理评估是否使用 压缩数据
-
-8.创建表时，带有[`--sql_mode=NO_ENGINE_SUBSTITUTION`](https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_sql_mode) ，当数据库不支持引擎会报错（而不是使用默认替代） 
-
-show engines;   查看支持的引擎
-
-**3.事务** ACID
-
-原子性   涉及InnoDB事务  1.autocommit 设置 2.commit 3.rollback
-
-一致性    1.double write 缓冲区  2. InnoDB 崩溃恢复
-
-隔离性	事务的隔离级别  1.autocommit 设置 2.事务隔离级别 set transaction 级别 3. InnoDB 锁 底层实现
-
-持久性   取决于mysql 跟底层硬件的交互
-
-**4.架构**
+ **1.架构**
 
 整体：
 
@@ -2727,7 +2691,7 @@ show engines;   查看支持的引擎
 
 分为在内存中的 和 在磁盘 中的两部分
 
-**IN  MEMORY**
+**2.IN  MEMORY**
 
 数据库页读取  读取先判断是否在缓存池中，命中返回，否则读取磁盘到缓存池，返回
 
@@ -2918,11 +2882,11 @@ Last checkpoint at           18616805
 
 ```
 
-**ON-Disk**
+**3.ON-Disk**
 
-1.table
+**1.table**
 
-2.index
+**2.index**
 
 ​	聚簇索引并不是单独的索引，是数据存储方式（聚簇 数据行和相邻的键紧凑的存储在一起，InnoDB（主键/第一个唯一非空索引/隐式定义主键）  数据在叶子结	点，索引在父辈节点） 主键随机id 会导致索引 变长 产生页分裂和空间碎片，InnoDB聚簇索引还是 尽量使用顺序插入 递增的主键  
 
@@ -3039,6 +3003,28 @@ Last checkpoint at           18616805
 **6.undo log**
 
 ​		存储在undo log segments, undo log 与单个读写事务关联
+
+**4.日志文件**
+
+`SHOW VARIABLES like 'datadir'` 查看数据位置
+
+- **错误日志**            `SHOW VARIABLES like 'log_error'`    查看错误日志位置，主机名称.err
+
+- **慢查询日志**  `SHOW VARIABLES like 'long_query_time'` 查看慢查询阈值  `show variables like 'slow_query_log_file'` 日志位置
+
+    `show variables like 'log_output'` 默认file 生成慢日志，可以修改成table，之后会记录在mysql.slow_log 表里，这个表默认是  ENGINE=CSV
+
+  可以修改成MyISAM
+
+- **查询日志** 默认关闭 默认为: 主机名.log `show variables like '%general_log%'` 可查看位置和开关 
+
+- **二进制日志**      记录全部对数据库进行修改的操作 **增、删、改**
+
+   `SHOW BINLOG EVENTS IN 'LXAJT100952451-bin.000009'` 可查bin log中记录的全部信息
+
+  二进制日志可用来**恢复、复制、审计**
+
+  
 
 ###### **2.MyISAM** 存储引擎
 
