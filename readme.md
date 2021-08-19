@@ -638,7 +638,7 @@ SourceFile: "Synchronized.java"
 
 之后对锁做了优化
 
-![图片](https://mmbiz.qpic.cn/mmbiz_jpg/uChmeeX1FpyB6WkMTL2IUapfTtGH6FFOiaEtKGL0EickicibDjwEqKRK8rMUz7kxlSmiapXejO8fmmcyBGBSSju8TYQ/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![sada](https://gitee.com/lifutian66/img/raw/master/img/sada.png)
 
 1.偏向锁
 
