@@ -2884,7 +2884,57 @@ Last checkpoint at           18616805
 
 **3.ON-Disk**
 
+整体结构：
+
+![image-20210819170359576](https://gitee.com/lifutian66/img/raw/master/img/image-20210819170359576.png)
+
+​		**表空间** 共享表空间ibdata1、innodb在 每个表各自表空间
+
+​		**段** 数据段、索引段、回滚段，段开始分配32页大小的碎片页，使用完这些页后，才是64个连续页申请（节省磁盘）
+
+​		**区**  大小为  1M，默认有64个连续的页（32K 页 区2M，64K 页 区4M）
+
+​		**页**  `innodb_page_siz` 默认16K 可调整   
+
+​		![image-20210820180213011](https://gitee.com/lifutian66/img/raw/master/img/image-20210820180213011.png)
+
+​		**行**  innodb 面向行存储的，支持`REDUNDANT`，`COMPACT`， `DYNAMIC`，和`COMPRESSED`
+
+​		Innodb 支持文件格式 Antelope(旧的) =>支持REDUNDANT和COMPACT 、 Barracuda（新的）全支持
+
+- REDUNDANT  为了兼容老版本，768 个字节的可变长度列值存储在 B 树节点内的索引记录中，其余部分存储在溢出页上
+
+  ![image-20210820140221764](https://gitee.com/lifutian66/img/raw/master/img/image-20210820140221764.png)
+
+  **头占6字节**
+
+- COMPACT 
+
+  ![image-20210820143549287](https://gitee.com/lifutian66/img/raw/master/img/image-20210820143549287.png)
+
+  对于null 值并不会占用后面的数据存储空间，NULL标记位按二进制,下标代表字段，值1/0为该字段是否可以为null
+
+  **头占5字节**
+
+- DYNAMIC 
+
+  同COMPACT 一样的行格式，但增加了增强的长期可变长度列和支持大型索引键前缀的存储能力
+
+- COMPRESSED `Zlib`, `Lz4`, or `None`压缩
+
+  提供相同的存储特性和功能的 `DYNAMIC`行格式，但增加了对表和索引数据压缩的支持
+
+  **注意：**1.每行新增事务ID列和回滚指针列，分别为6字节和7字节的大小。若InnoDB表没有定义主键，每行还会增加一个6字节的rowid列
+
+  ​			2.当数据行保存不了数据时，会保存在额外的页中 Uncompressed BLOB Page
+
+  ![image-20210820174440111](https://gitee.com/lifutian66/img/raw/master/img/image-20210820174440111.png)
+
+  
+
 **1.table**
+
+​	Innodb的表根据主键顺序存放，没主键 -> 非空索引 -> 自动创建 6字节大小的指针，可查_rowid 为该表主键字段的值
 
 **2.index**
 
@@ -2908,7 +2958,9 @@ Last checkpoint at           18616805
 
 **3.tablespaces**
 
-1. System Tablespace
+1. **System Tablespace**
+
+   `SHOW variables like 'innodb_data_file_path';`  可查看配置 ibdata1:12M:autoextend ,可自动增长ibdata1的文件
 
    5.7这个区域还包含doublewrite buffer+undo logs+change buffer+InnoDB Data Dictionary
 
@@ -2916,19 +2968,19 @@ Last checkpoint at           18616805
 
    8.0.20之后就只剩下 change buffer
 
-2. File-Per-Table Tablespaces
+2. **File-Per-Table Tablespaces**
 
-    **innodb 默认**
+    **innodb 默认** `SHOW variables like 'innodb_file_per_table'`  可查看是否开启
 
     单个表索引和数据存储的单独文件，`文件以表（`*`table_name`*.ibd`）命名，表文件表空间支持动态（DYNAMIC)和压缩（commpressed)行格式
 
-3. General Tablespaces
+3. **General Tablespaces**
 
     类似System Tablespace 是共享表空间，create tablespace 创建的共享表空间，可以创建于mysql数据目录外的其他表空间，可容纳多个表 
 
     支持所有的行格式
 
-4. Undo Tablespaces
+4. **Undo Tablespaces**
 
    存储undo logs，默认创建两个undo tablespace 为 sql执行 rollback 服务，默认在 data directory ，名字是undo_001` and `undo_002， undo tablespace   
 
@@ -2938,7 +2990,7 @@ Last checkpoint at           18616805
 
     8.0.23 之后 有四个  extents （区/簇），每个最小16MB
 
-5. Temporary Tablespaces
+5. **Temporary Tablespaces**
 
    临时表空间       --- 	会话临时表空间 和 全局临时表空间
 
@@ -2986,9 +3038,9 @@ Last checkpoint at           18616805
 
 **5.redo log**
 
-​		基于磁盘的数据结构，记录的是对页的物理操作，比如：偏移量800，写 ‘1111’
+​		基于磁盘的数据结构，记录的是对页的物理操作，比如：偏移量800，写 ‘1111’ 往磁盘写是一个扇区,512字节
 
-​		在崩溃恢复期间用于纠正不完整事务写入的数据      我的机器48M
+​		在崩溃恢复期间用于纠正不完整事务写入的数据，记录事务日志      我的机器48M
 
 ​		 `innodb_log_file_size` 可调整其大小
 
@@ -2996,9 +3048,13 @@ Last checkpoint at           18616805
 
 ​		`innodb_log_group_home_dir` 可调整redolog 地址，否则会在 MySQL 数据目录 datadir
 
-​		在提交事务之前刷新事务的[重做日志](https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_redo_log)。`InnoDB` 使用[组提交](https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_group_commit) 功能将多个刷新请求组合在一起，以避免每次提交一次刷新。使用组提交， `InnoDB`向日志文件发
+​		在提交事务之前刷新事务的redo_log `InnoDB` 使用[组提交](https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_group_commit) 功能将多个刷新请求组合在一起，以避免每次提交一次刷新。使用组提交， `InnoDB`向日志文件发
 
 ​		出一次写入以对大约同时提交的多个用户事务执行提交操作，从而显着提高吞吐量。
+
+​		默认在数据目录下，有一个redo log group，每组下至少有2个redo log，例如ib_logfile0和ib_logfile1文件,循环方式写入
+
+​		![image-20210819160733497](https://gitee.com/lifutian66/img/raw/master/img/image-20210819160733497.png)
 
 **6.undo log**
 
@@ -3022,9 +3078,33 @@ Last checkpoint at           18616805
 
    `SHOW BINLOG EVENTS IN 'LXAJT100952451-bin.000009'` 可查bin log中记录的全部信息
 
-  二进制日志可用来**恢复、复制、审计**
+  二进制日志目的：**恢复、复制**，默认是关闭的，变量`sql_log_bin` 可查看当前是否开启，启用后性能稍微变慢
 
+  `max_binlog_size`  单个binlog 文件大小，超出后，后缀+1 生成新的文件，默认大小为1G
   
+  若当前使用引擎支持事务，所有的未提交的二进制日志记录在缓存中，缓存大小由`binlog_cache_size` 决定,默认32K，超过之后使用临时磁盘写入binlog
+  
+  可根据`SHOW GLOBAL STATUS` 中的 `Binlog_cache_disk_use`、`Binlog_cache_use`  记录了使用缓存写入binlog次数、使用磁盘写入binlog次数
+  
+  `sync_binlog` 表示缓存多少次写入binlog，默认是1，同步写磁盘的方式写binlog，仅在事务提交前写入磁盘，次数调大，服务器宕机会有部分未写入binlog
+  
+  `binlog_format` 决定binlog记录的内容：
+  
+  `STATEMENT`   记录日期的逻辑sql 语句，一些UUID RAND 函数执行结果可能不一样
+  
+  `ROW`  默认，记录表的行更改情况，binlog会变大，复制采用传输二进制日志方式实现，因此复制的网络开销也会增加
+  
+  `MIXED` 默认采用STATEMENT格式记录，一些情况下ROW
+  
+  各个引擎对binlog格式支持
+  
+  ![image-20210819145432215](https://gitee.com/lifutian66/img/raw/master/img/image-20210819145432215.png)
+  
+  `mysqlbinlog   --start-position=偏移量  日志文件`
+  
+  查看必须通过mysql提供的mysqlbinlog，`STATEMENT`  格式的就可以看到sql，而`ROW`需要添加 -v或-vv 查看更改，以下为row看到的结果更改sql
+  
+  ![image-20210819151711432](https://gitee.com/lifutian66/img/raw/master/img/image-20210819151711432.png)
 
 ###### **2.MyISAM** 存储引擎
 
