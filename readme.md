@@ -2663,6 +2663,12 @@ mysql 整体架构，连接池组件、管理服务和工具组件、sql接口�
 
 ###### **1.InnoDB** 存储引擎 
 
+**为什么使用B+树？**
+
+**磁盘往往不是严格按需读取，磁盘读取一般都会预读，预读的长度一般为页（page）的整倍数，页是计算机管理存储器的逻辑块，硬件及操作系统往往将主存和磁盘存储区分割为连续的大小相等的块，每个存储块称为一页（在许多操作系统中，页得大小通常为4k），主存和磁盘以页为单位交换数据。当程序要读取的数据不在主存中时，会触发一个缺页异常，此时系统会向磁盘发出读盘信号，磁盘会找到数据的起始位置并向后连续读取一页或几页载入内存中，然后异常返回，程序继续运行。数据库系统的设计者巧妙利用了磁盘预读原理，将一个节点的大小设为等于一个页，这样每个节点只需要一次I/O就可以完全载入 **
+
+
+
 设计的目的面向在线事务处理
 
 ![image-20210526151036181](https://gitee.com/lifutian66/img/raw/master/img/image-20210526151036181.png)
@@ -2864,7 +2870,7 @@ Free buffers+ Database pages  + 自适应hash +Lock + INSERT BUFF 等 = Buffer p
 
 事务提交，Log Buffer 刷新到磁盘，先写redo log ，然后在异步刷新到真正磁盘，崩溃，使用redo log 恢复，查找redolog checkpoint标记为 是写过的，
 恢复只需要恢复checkpoint 之后的即可，前面的已经刷进磁盘，当缓存不够用时，缓存根据LRU回收最少使用的页，将脏页刷新到磁盘，那么这页checkpiont 标记为是写过
-
+redo log 以块的方式保存，每个块大小为 512K，与磁盘扇区大小一样，所以，redo log 写入可以保证原子性，不需要doublewrite技术
 
 ---
 LOG
@@ -2898,7 +2904,9 @@ Last checkpoint at           18616805
 
 ​		![image-20210820180213011](https://gitee.com/lifutian66/img/raw/master/img/image-20210820180213011.png)
 
-​		**行**  innodb 面向行存储的，支持`REDUNDANT`，`COMPACT`， `DYNAMIC`，和`COMPRESSED`
+​		**Infimum Record** 记录该页中比任何主键值都小的值  **Supremum Record** 记录该页中比任何主键值都大的值
+
+​	**行**  innodb 面向行存储的，支持`REDUNDANT`，`COMPACT`， `DYNAMIC`，和`COMPRESSED`
 
 ​		Innodb 支持文件格式 Antelope(旧的) =>支持REDUNDANT和COMPACT 、 Barracuda（新的）全支持
 
@@ -2924,12 +2932,20 @@ Last checkpoint at           18616805
 
   提供相同的存储特性和功能的 `DYNAMIC`行格式，但增加了对表和索引数据压缩的支持
 
+  DYNAMIC，COMPRESSED  对BLOB 采用完全的行溢出方式，
+
   **注意：**1.每行新增事务ID列和回滚指针列，分别为6字节和7字节的大小。若InnoDB表没有定义主键，每行还会增加一个6字节的rowid列
 
   ​			2.当数据行保存不了数据时，会保存在额外的页中 Uncompressed BLOB Page
 
+  非压缩、动态 行溢出
+  
   ![image-20210820174440111](https://gitee.com/lifutian66/img/raw/master/img/image-20210820174440111.png)
-
+  
+  压缩、动态的
+  
+  ![image-20210823101010403](https://gitee.com/lifutian66/img/raw/master/img/image-20210823101010403.png)
+  
   
 
 **1.table**
@@ -2944,7 +2960,7 @@ Last checkpoint at           18616805
 
 
 
-`InnoDB` 索引是[B树](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_b_tree)数据结构。空间索引使用 [R树](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_r_tree)
+`InnoDB` 索引是B+树 数据结构。空间索引使用 R树
 
 二级索引保存的数据是 主键和二级索引值，然后依据此主键在聚簇索引中查找 row，这个过程称为回表
 
@@ -2954,7 +2970,7 @@ Last checkpoint at           18616805
 
 ​	2.将一个或多个 临时中间文件 中的所有条目执行合并排序
 
-​	3.已排序的条目插入 [B-tree中](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_b_tree)
+​	3.已排序的条目插入 B+tree 中
 
 **3.tablespaces**
 
@@ -3052,13 +3068,13 @@ Last checkpoint at           18616805
 
 ​		出一次写入以对大约同时提交的多个用户事务执行提交操作，从而显着提高吞吐量。
 
-​		默认在数据目录下，有一个redo log group，每组下至少有2个redo log，例如ib_logfile0和ib_logfile1文件,循环方式写入
+​		默认在数据目录下，只有一个redo log group，每组下至少有2个redo log，例如ib_logfile0和ib_logfile1文件,循环方式写入
 
 ​		![image-20210819160733497](https://gitee.com/lifutian66/img/raw/master/img/image-20210819160733497.png)
 
 **6.undo log**
 
-​		存储在undo log segments, undo log 与单个读写事务关联
+​		存储在undo log segments, 5.7及以前 存储在 共享表空间 ,8.0存在单独的undo table space，undo log 与单个读写事务关联，记录逻辑日志,只能将数据库逻辑地恢复到原来的样子，undo log 另一个作用是MVCC，若记录被其他事务占用，当前事务可以通过undo log 读取之前 的版本信息
 
 **4.日志文件**
 
@@ -3160,7 +3176,7 @@ An [exclusive (`X`) lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#
 
 ###### 2.意向锁
 
-为了防止表锁和行锁冲突，产生的全表扫描，意向锁是表级锁 
+为了防止表锁和行锁冲突，产生的全表扫描，意向锁是表级锁 ，只是标记而不是真正的锁
 
 An [intention shared lock](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_intention_shared_lock) (`IS`)
 
@@ -3198,7 +3214,7 @@ transaction A gap S-lock 和 transaction B  gap X-lock  可以在同一个 gap  
 
    和7，不同的事务分别插入5和6，每个事务都会产生一个加在4-7之间的插入意向锁，获取在插入行上的排它锁，但是不会被互相锁住，因为数据行并不冲突。
 
-###### 7.自动锁`AUTO-INC`锁
+###### 7.自增锁`AUTO-INC`锁
 
 ​	表级锁 `AUTO_INCREMENT`列
 
@@ -3221,6 +3237,8 @@ transaction A gap S-lock 和 transaction B  gap X-lock  可以在同一个 gap  
 InnoDB 事务模型 旨在 结合 传统的两段式锁 在**多版本数据库** 上的高效处理，不需要锁升级，InnoDB 锁信息占用资源很少
 
 mysql提供了 两种事务型的存储引擎：InnoDB和NDB Cluster 另外还有一些第三方存储引擎也支持事务，比较知名的包括XtraDB和PBXT。
+
+隔离性锁机制保证，持久性 原子性 redo log保证，undo log 保证一致性
 
 ###### 2.隔离级别
 
@@ -3300,7 +3318,9 @@ NOWAIT、SKIP LOCKED 均是 行锁
 
 InnoDB 默认，当大量线程等待同一个锁时，死锁检测会导致速度减慢 ，可以使用 [innodb_dedicated_server ](https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_dedicated_server)变量禁用死锁检测
 
-死锁默认，锁竞争会采用超时策略
+wait-for graph等待图（存在回路即为死锁） ，锁竞争会采用超时策略，回滚undo log较少的事务
+
+
 
 ###### 9.事务调度
 
@@ -3310,7 +3330,7 @@ MySQL 8.0.20 之前，`InnoDB`也是采用先进先出 (FIFO) 算法来调度事
 
 ###### 1.**类型：**  
 
-**B-Tree 索引**    按照顺序存储   用于查找和排序
+**B+ Tree 索引**    按照顺序存储   用于查找和排序 高扇出性
 
 底层实现：InnoDB B+Tree      NDB T-Tree 
 
@@ -3344,7 +3364,7 @@ InnoDB 自适应hash 就是为了查找更快  当然也可以自己维护 创�
 
 **其他索引**
 
-聚簇索引、覆盖索引等等
+联合索引（本质还是b+树）、覆盖索引（索引中就可查到要的信息）等等
 
 ###### 2.**优点**：
 
@@ -3428,25 +3448,371 @@ schema 设计
 
 ​	InnoDB 也可以有类似 先删除索引  导入数据 在创建索引
 
-##### 6.原理
-
-查询过程：
-
-![image-20210526141007314](https://gitee.com/lifutian66/img/raw/master/img/image-20210526141007314.png)
-
-1.mysql 客户端/服务之间的通信息以是半双工的，任何时刻只能由一方发送，另一方等待
-
-
-
 ### 7.Redis 
 
-#### 1.数据结构
+#### 1.底层编码
 
-#### 2.底层实现
+##### 1.  字符串
 
-#### 3.缓存问题
+   ```c
+   struct sdshdr{
+       //记录buf数组已使用的字节数量
+       int len;
+       //记录buf中未使用的字节数量
+       int free;
+       //保存数据 保存文本数据或二进制数据
+       char buf[];
+   }
+   ```
 
-#### 4.分布式锁
+   ​	SDS字符串，区别于c的字符串
+
+   ​    1.记录len便于查找
+
+   ​    2.free len 便于进行内存分配
+
+   ​    3.空间预分配，空间惰性回收，减少分配次数，杜绝内存溢出
+
+   ​	4.保证二进制安全 buf[] 数组保存（不会因为'\0'结束读取）
+
+##### 2. 链表
+
+   ```c
+   //链表节点
+   typedef struct listNode {
+       // 前置节点
+       struct listNode * prev;
+       // 后置节点
+       struct listNode * next;
+       // 节点的值
+       void * value;
+   }listNod;
+   //链表
+   typedef struct list {
+       // 表头节点
+       listNode * head;
+       // 表尾节点
+       listNode * tail;
+       // 链表所包含的节点数量
+       unsigned long len;
+       // 节点值复制函数
+       void *(*dup)(void *ptr);
+       //节点值释放函数
+       void (*free)(void *ptr);
+       // 节点值对比函数
+       int (*match)(void *ptr,void *key);
+   } list;
+   ```
+
+   特点：双端、无环、长度计数、头尾指针、多态（类型不限制）
+
+##### 3. 字典  k-v
+
+数据库和hash键的底层实现
+
+   ```c
+   //hash表节点
+   typedef struct dictEntry {
+       //键
+       void *key;
+       // 值
+       union{
+           void *val;
+           uint64_tu64;
+           int64_ts64;
+       } v;
+       // 指向下个哈希表节点，形成链表，hash冲突解决 链表法
+       struct dictEntry *next;
+   } dictEntry;
+   
+   // hash 表
+   typedef struct dictht {
+       // 哈希表数组
+       dictEntry **table;
+       //哈希表大小
+       unsigned long size;
+       //哈希表大小掩码，用于计算索引值   总是等于size-1
+       unsigned long sizemask;
+       // 该哈希表已有节点的数量
+       unsigned long used;
+   } dictht;
+   
+   // 字典
+   typedef struct dict {
+       // 类型特定函数
+       dictType *type;
+       // 私有数据
+       void *privdata;
+       // 哈希表 两个hash表，rehash做切换使用
+       dictht ht[2];
+       //  记录rehash进度， 当rehash不在进行时，值为-1
+       in trehashidx; 
+   } dict;
+   
+   //类型 函数
+   typedef struct dictType {
+       // 计算哈希值的函数
+       unsigned int (*hashFunction)(const void *key);
+       // 复制键的函数
+       void *(*keyDup)(void *privdata, const void *key);
+   	// 复制值的函数
+       void *(*valDup)(void *privdata, const void *obj);
+       // 对比键的函数
+       int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+       // 销毁键的函数
+       void (*keyDestructor)(void *privdata, void *key);
+       // 销毁值的函数
+       void (*valDestructor)(void *privdata, void *obj);
+   } dictType;
+   ```
+
+   根据键计算hash值和索引，将包含新键值对的hash节点放到hash表数组索引位置，存在的话，链址法处理
+
+```c
+hash = dict->type->hashFunction(key);
+index = hash & dict->ht[x].sizemask;
+```
+
+**MurmurHash2**算法来计算键的哈希值
+
+##### 4. 跳跃表
+
+​	skiplist ，有序集合键的底层实现之一，大部分情况下效率和平衡树相媲美，实现更简单
+
+​	
+
+```c
+//跳表节点
+typedef struct zskiplistNode {
+    // 层 根据幂次定律（越大的数出现概率越小） 随机生成一个介于1和32之间的值作为level数组的大小，就是层的高度
+    struct zskiplistLevel {
+        // 前进指针
+        struct zskiplistNode *forward;
+        // 跨度 记录两个节点之间的距离，指向null 跨度就是0
+        unsigned int span;
+    } level[];
+    // 后退指针
+    struct zskiplistNode *backward;
+    // 分值
+    double score;
+    // 成员对象  在同一个跳跃表中，多个节点可以包含相同的分值，但每个节点的成员对象必须是唯一的。      
+    // 按照分值大小进行排序，当分值相同时，节点按照成员对象的大小进行排序。
+    robj *obj;
+} zskiplistNode;
+
+//跳跃表
+typedef struct zskiplist {
+    // 表头节点和表尾节点
+    structz skiplistNode *header, *tail;
+    // 表中节点的数量
+    unsigned long length;
+    // 表中层数最大的节点的层数
+    int level;
+} zskiplist
+```
+
+![image-20210827175759016](https://gitee.com/lifutian66/img/raw/master/img/image-20210827175759016.png)
+
+##### 5. 整数集合
+
+集合键的底层实现之一，有序、无重复的方式保存集合元素，数值过大升级操作，并不支持降级操作
+
+```c
+typedef struct intset {
+    // 编码方式  INTSET_ENC_INT16  INTSET_ENC_INT32 INTSET_ENC_INT64
+    uint32_t encoding;
+    // 集合包含的元素数量
+    uint32_t length;
+    // 保存元素的数组
+    int8_t contents[];
+} intset;
+```
+
+##### 6. 压缩列表
+
+​	列表键和哈希键的底层实现之一，当一个列表键只包含少量列表项，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么Redis就会使用压
+
+缩列表来做列表键的底层实现。
+
+​	节约内存，特殊编码的联系内存块组成的顺序型数据结构，每个节点可以保存一个字节数组或者整数值，添加/删除会导致连锁更新操作
+
+#### 2.数据结构
+
+​	redis 并不是直接面向存储结构，而是构建了对象，使用引用计数器回收内存
+
+```c
+pedef struct redisObject {
+ 	// 类型 数据对象
+    unsigned type:4;
+    // 编码 底层数据实现
+    unsigned encoding:4;
+    // 指向底层实现数据结构的指针
+    void *ptr;
+    // ...
+} robj;
+```
+1. 字符串(string) 
+
+   实现有 int（整数） 、embstr（embstr编码字符串,只读，修改则会变成raw）、  raw（简单动态字符串）
+
+2. 哈希(hash)
+
+   实现有 ziplist（压缩列表）、ht（哈希表） 
+
+3. 列表(list)
+
+   实现有 ziplist（压缩列表）、linkedlist（双端链表）
+
+4. 集合(set)
+
+   实现由intset（整数集合）、ht（哈希表）
+
+5. 有序集合(zset)
+
+   实现有 ziplist（压缩列表）、skiplist（有序集合，里面有个 字典）
+
+   **注意：**
+
+   **Redis会共享值为0到9999的字符串对象，对象会记录自己的最后一次被访问的时间，这个时间可以用于计算对象的空转时间。**
+
+#### 3.数据库
+
+redisServer 
+
+```c
+struct redisServer {
+    
+    // 服务器的数据库数量
+    int dbnum;
+    // 一个数组，保存着服务器中的所有数据库  默认0-15 16个
+    redisDb *db;
+    // ...
+};
+
+//每个数据库
+typedef struct redisDb {
+    // ...
+    // 数据库键空间，保存着数据库中的所有键值对（多种数据结构）
+    dict *dict;
+    // 过期字典，保存着键的过期时间，键是指针指向某个键对象，值是long 类型整数，毫秒精度的UNIX时间戳
+    dict *expires;
+    // ...
+} redisDb;
+//客户端 客户端会在选择数据库之后，指针指向对应数据库，记录在 redisClient 的  redisDb *db;
+typedef struct redisClient {
+	// ...
+	// 记录客户端当前正在使用的数据库
+	redisDb *db;
+    // ...
+} redisClient;
+```
+
+##### 1.**过期处理** 
+
+1.定时删除（对内存最友好的 但是对cpu时间不友好）  创建键的同时 创建一个timer 当时间到了 就删除 
+
+2.惰性删除 （对cpu 时间最友好，但对内存不友好） 不删除 但是每次查询 都会判断是否过期 不过期才返回 否则删除
+
+3.定期删除  每隔一段时间 检查数据库  删除 （对以上的折中）但是难点是 执行的时长和頻率
+
+redis服务器实际使用的是 **后两种结合配合使用**
+
+**RDB** 过期键处理： 过期键不保存到RDB中，载入RDB文件，主服务器不载入过期键，从服务器不论过期不过期都载入
+
+**AOF** 过期键处理： 过期键没被惰性/定期处理不会有任何影响，被处理，AOF文件显示追加DEL命令，重新过期键不保存，主服务器主动DEL 发给从服务器
+
+##### 2.数据库通知
+
+订阅事件：订阅键（key-space notification）/订阅事件（key-event notification）
+
+发送通知： 
+
+```c
+void notifyKeyspaceEvent(int type,char *event,robj *key,int dbid);
+
+void notifyKeyspaceEvent(type, event, key, dbid);
+```
+
+#### 4.持久化
+
+##### 1.RDB
+
+**写入**：可以手动执行（save-阻塞  bgsave->子进程），也可以根据配置  save 选项 定期/定量 执行 保存一个压缩的全量二进制文件
+
+**载入:**
+
+![image-20210901142955917](https://gitee.com/lifutian66/img/raw/master/img/image-20210901142955917.png)
+
+**save 选项**  **自动间隔性保存**
+
+save 900 1
+save 300 10
+save 60 10000
+
+以下三个条件满足一个即可触发 bgsave命令
+
+·服务器在900秒之内，对数据库进行了至少1次修改。
+·服务器在300秒之内，对数据库进行了至少10次修改。
+·服务器在60秒之内，对数据库进行了至少10000次修改。
+
+Redis服务器会维护一个 dirty计数器（距上次save/bgsave 修改的次数），一个lastsave属性（上次save/bgsave的时间戳）
+
+Redis的服务器周期性操作函数**serverCron**默认每隔100毫秒就会执行一次，其中一项工作就是检查save选项所设置的保存条件是否已经满足
+
+**结构：**![image-20210901145058091](https://gitee.com/lifutian66/img/raw/master/img/image-20210901145058091.png)
+
+**查看**：od  -cx  dump.rdb
+
+##### 2.AOF
+
+AOF持久化是通过保存Redis服务器所执行的**写命令**来记录数据库状态的，
+
+**写入：**需要配置打开 aof功能，启动命令增加 --appendonly yes 即可开启 aof，会将每条修改命令都记录，先写入缓冲区，根据**appendfsync配置值**，触发写入
+
+事件，aof文件越来越大，那么就有重新功能
+
+在redisServer ,有aof 的缓冲区
+
+```c
+struct redisServer {
+    // ...
+    // AOF缓冲区
+    sds aof_buf;
+    // ...
+};
+```
+
+appendfsync 选项值：
+
+always（总是写入aof文件（这指写入磁盘缓冲区），并完成磁盘同步）
+
+everysec（每一秒写入aof文件（这指写入磁盘缓冲区），并完成磁盘同步）
+
+no（写入aof文件（这指写入磁盘缓冲区），不等待磁盘同步，由操作系统决定何时同步）
+
+**载入：**启动默认会载入
+
+![image-20210901161321358](https://gitee.com/lifutian66/img/raw/master/img/image-20210901161321358.png)
+
+**重写**：并不是重新现有aof 文件，因为现有的可能特别大，读取当前服务器的状态，命令为现有全部数据，后台子进程执行，为了解决重新期间导致的不一致，设置了aof重写缓冲区，当Redis服务器执行完一个写命令之后，它会同时将这个写命令发送给AOF缓冲区和AOF重写缓冲区，然后合并重新的文件和缓冲区内容
+
+**另：**文件事件（套接字-I/O多路复用程序-文件派发器-事件处理器）
+
+​		时间事件 （无序链表循环遍历）
+
+时间处理调度：
+
+![image-20210901181311213](https://gitee.com/lifutian66/img/raw/master/img/image-20210901181311213.png)
+
+#### 5.多机
+
+##### 1.复制
+
+##### 2.哨兵
+
+##### 3.集群 
+
+
 
 ### 8.消息队列
 
