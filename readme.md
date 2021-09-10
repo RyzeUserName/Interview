@@ -3808,17 +3808,364 @@ no（写入aof文件（这指写入磁盘缓冲区），不等待磁盘同步，
 
 ##### 1.复制
 
+
+
+**旧版**：同步（sync）、  命令传播（command propagate）
+
+**同步**：![image-20210902101144292](https://gitee.com/lifutian66/img/raw/master/img/image-20210902101144292.png)
+
+**命令传播**：主服务器会将执行的写命令发送给从服务器执行
+
+**同步（sync） 十分耗费资源，旧版断线重复复制问题**
+
+
+
+**新版**:
+
+PSYNC 代替 SYNC,有两种模式：完整重同步 和部分重同步
+
+**部分重同步**：![image-20210902102002837](https://gitee.com/lifutian66/img/raw/master/img/image-20210902102002837.png)
+
+主从机都会维护一个复制偏移量 ，主机发送命令传播都会将命令发送到 复制积压缓冲区，断线重连 主从机对比复制偏移量 ，当偏差在复制积压缓冲区的内容里，
+
+那么就会执行在复制积压缓冲区取出缺少部分进行同步（部分重同步）,当超出这个范围，那么就执行完整重同步
+
+
+
+**复制实现**：
+
+​		① 设置主服务器的地址端口
+
+​		②  建立套接字连接
+
+​		③   发送ping 等待pong
+
+​		④  身份验证 从服务器 设置 masterauth    主服务器设置requirepass 
+
+​		⑤   发送从服务器的监听端口
+
+​		⑥  同步
+
+​		⑦  命令传播
+
 ##### 2.哨兵
+
+主动切换，服务容错
+
+![image-20210902103424820](https://gitee.com/lifutian66/img/raw/master/img/image-20210902103424820.png)
+
+![image-20210902103534899](https://gitee.com/lifutian66/img/raw/master/img/image-20210902103534899.png)
+
+![image-20210902103545506](https://gitee.com/lifutian66/img/raw/master/img/image-20210902103545506.png)
+
+普通的redis服务器使用代码替换成sentinel 专用代码  :    端口默认26379 
+
+创建**两个异步网络链接**：
+
+一个是命令连接，这个连接专门用于向主服务器发送命令，并接收命令回复。
+
+另一个是订阅连接，这个连接专门用于订阅主服务器的__ sentinel __:hello频道。 
+
+
+
+默认10s 一次頻率发送info 到主服务器，主服务器回复自身信息+从服务器状况 
+
+Sentinel会以每两秒一次的频率，向服务器的 __ sentinel __:hello频道发送信息
+
+![image-20210902112155935](https://gitee.com/lifutian66/img/raw/master/img/image-20210902112155935.png)
+
+
+
+
+
+sentinel 以每秒頻率向有命令连接的服务器发送ping命令，在该限制的时间内，没收到服务器的有效回复，sentinel会认为服务主观下线，询问其他的 sentinel ，
+
+当收集到足够数量的**主观下线**（设置的quorum 参数），那么就会**客观下线**，进行故障转移
+
+
+
+进行**故障转移**，需要sentinel 全部进行协作，选举出领头sentinel，并由此对下线主服务器进行故障转移每选举一次 纪元加一，每个认为客观下线的sentinel 都会
+
+选自己，本着先到先得 ，相互发消息，最后过半的得票 的sentinel成为 领头sentinel 否则进行下一轮选举 ,头sentinel ：
+
+1）在已下线主服务器属下的所有从服务器里面挑选出一个从服务器，并将其转换为主服务器。（网络状态好，优先级高，数据全的，排序，选第一个）
+2）让已下线主服务器属下的所有从服务器改为复制新的主服务器。
+3）将已下线主服务器设置为新的主服务器的从服务器，当这个旧的主服务器重新上线时，它就会成为新的主服务器的从服务器
 
 ##### 3.集群 
 
+集群通过分片来进行数据共享，并提供复制和故障转移功能
 
+**加入集群**：
+
+![image-20210902142400380](https://gitee.com/lifutian66/img/raw/master/img/image-20210902142400380.png)
+
+之后节点A会将节点B的信息通过Gossip协议传播给集群中的其他节点，让其他节点也与节点B进行握手，最终，经过一段时间之后，节点B会被集群中的所有节点认识。
+
+**集群数据**：Redis集群通过分片的方式来保存数据库中的键值对：集群的整个数据库被分为16384个槽（slot），数据库中的每个键都属于这16384个槽的其中一个，集群中的每个节点可以处理0个或最多16384个槽。slots 表示 16384 二进制数组 也就是 16384 /8 =2048字节，当这个数组的元素上是1 ，表示该节点负责处理的槽，numslots属性则记录节点负责处理的槽的数量，也即是slots数组中值为1的二进制位的数量，节点相互的传播槽节点信息，以此更新 clusterNode里面其他节点的槽点信息
+
+```c
+ struct clusterNode {
+  // ...
+ unsigned char slots[16384/8]; 
+ int numslots;
+ // ...
+};    
+```
+
+CRC16(key) & 16383 槽下标计算，其还会**保存槽和键的关系**（skiplist）,以便找到键所在槽
+
+**重新分片**：
+
+将槽以及槽所属的键值对 进行转移  可以在线操作，不需要下线
+
+由redis-trib 负责执行 
+
+1.通知目标准备导入
+
+2.通知源节点指定slot键值对迁移
+
+3.从源节点获得最多count个属于槽slot的键值对的键名（key name）
+
+4.redis-trib对每个键都发送 发送一条命令到 源节点，源节点键原子地从源节点迁移至目标节点。
+
+5.更改槽slot指派到目标节点
+
+![image-20210902170617436](https://gitee.com/lifutian66/img/raw/master/img/image-20210902170617436.png)
+
+迁移过程中当客户端向源节点发送一个与数据库键有关的命令，并且命令要处理的数据库键恰好就属于正在被迁移的槽时：
+
+​	源节点会先在自己的数据库里面查找指定的键，如果找到的话，就直接执行客户端发送的命令
+
+​	相反地，如果源节点没能在自己的数据库里面找到指定的键，那么这个键有可能已经被迁移到了目标节点，源节点将向客户端返回一个ASK错误，指引客户端转向正在导入槽的目标节点，并再次发送之前想要执行的命令。
+
+![image-20210902170906971](https://gitee.com/lifutian66/img/raw/master/img/image-20210902170906971.png)
+
+**复制与故障转移**
+
+主节点（处理槽）、从节点（负责复制主，并在主下线期间时，接替主的工作）
+
+**故障检测**
+
+每个节点都会定期向 其他节点发送PING 以此检测是否在线，规定时间内你没接收到PONG回复，那么就标记本节点维护的该节点信息更新为 疑似下线，
+
+集群中的各个节点会相互发送检测的各个节点状态信息，并将收到的消息发送，当一个集群过半主节点 认为 一个节点 疑似下线 ，那么这个就节点会被标记为FAIL 
+
+并在集群中广播该信息，收到信息的都会标记此为下线FAIL 
+
+**故障转移**
+
+对于每个配置纪元，集群里每个负责处理槽的主节点都有一次投票的机会，而第一个向主节点要求投票的从节点将获得主节点的投票。
+
+1.当从节点发现自己正在复制的主节点进入已下线状态时，从节点会向集群广播一条消息，要求所有收到这条消息、并且具有投票权的主节点向这个从节点投票。
+
+2.如果一个主节点具有投票权,并且这个主节点尚未投票给其他从节点,其他点将向要求投票那么就会投出去
+
+3.根据获取支持投票数量大于等于N/2+1 那么这个就会成为主节点，否则进新纪元，直至选出主节点
+
+4.新的主节点接替槽处理工作，新主节点广播PONG消息，让集群感知到
 
 ### 8.消息队列
 
 #### 1.RocketMQ
 
+用于主题发布订阅，自实现nameServer 替代zookpeer **最终一致性**，只**保证消息被消费者消费**，但设计上允许消息被**重复消费**
+
+![image-20210907101750696](https://gitee.com/lifutian66/img/raw/master/img/image-20210907101750696.png)
+
+##### 1.消息路由
+
+###### 1.初始化
+
+NameServer 
+
+核心代码：
+
+   创建 NamesrvController，启动 NamesrvController
+
+![image-20210907141555202](https://gitee.com/lifutian66/img/raw/master/img/image-20210907141555202.png)
+
+如何创建  NamesrvController：
+
+![image-20210907141704229](https://gitee.com/lifutian66/img/raw/master/img/image-20210907141704229.png)
+
+启动 NamesrvController，初始化NamesrvController
+
+![image-20210907141820480](https://gitee.com/lifutian66/img/raw/master/img/image-20210907141820480.png)
+
+初始化做了：初始化两个定时任务(下图)，注册JVM优雅停止线程池的函数（在上图的Runtime）
+
+![image-20210907142138443](https://gitee.com/lifutian66/img/raw/master/img/image-20210907142138443.png)
+
+###### 2.路由注册
+
+NamesrvController  构造函数 会创建RouteInfoManager，其内部存储全部路由信息
+
+![image-20210907143815440](https://gitee.com/lifutian66/img/raw/master/img/image-20210907143815440.png)
+
+1.Broker 启动时，启动定时任务，发送心跳到每个NameServer，发送RequestCode.REGISTER_BROKER
+
+![image-20210907145134278](https://gitee.com/lifutian66/img/raw/master/img/image-20210907145134278.png)
+
+![image-20210907145209538](https://gitee.com/lifutian66/img/raw/master/img/image-20210907145209538.png)
+
+![image-20210907145814267](https://gitee.com/lifutian66/img/raw/master/img/image-20210907145814267.png)
+
+2.NameServer 解析
+
+NameServer  初始化时  this.registerProcessor();  注册  DefaultRequestProcessor（单机）/ClusterTestRequestProcessor（集群）
+
+在 processRequest 找到处理  RequestCode.REGISTER_BROKER的，调用为 RouteInfoManager #  registerBroker
+
+![image-20210907150110264](https://gitee.com/lifutian66/img/raw/master/img/image-20210907150110264.png)
+
+![image-20210907150140496](https://gitee.com/lifutian66/img/raw/master/img/image-20210907150140496.png)
+
+处理过程为：
+
+![image-20210907151236107](https://gitee.com/lifutian66/img/raw/master/img/image-20210907151236107.png)
+
+![image-20210907151807456](https://gitee.com/lifutian66/img/raw/master/img/image-20210907151807456.png)
+
+创建/更新 topicQueueTable 列表
+
+![image-20210907151925899](https://gitee.com/lifutian66/img/raw/master/img/image-20210907151925899.png)
+
+###### 3.路由删除
+
+1.超时删除
+
+NamesrvController  初始化时的 定时任务1   RouteInfoManager#scanNotActiveBroker，循环查找，超时移除，更新brokerLiveTable、filterServerTable
+
+brokerAddrTable、clusterAddrTable、topicQueueTable  类似注册
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-09-07_15-30-28.png)
+
+​						![image-20210907161612167](https://gitee.com/lifutian66/img/raw/master/img/image-20210907161612167.png)
+
+2.主动下线  
+
+给每个NameServer发送， RequestCode.UNREGISTER_BROKER，服务端在 DefaultRequestProcessor  处理 RequestCode.UNREGISTER_BROKER,类似上面一
+
+样的过程
+
+![image-20210907181045751](https://gitee.com/lifutian66/img/raw/master/img/image-20210907181045751.png)
+
+![image-20210907181106466](https://gitee.com/lifutian66/img/raw/master/img/image-20210907181106466.png)
+
+###### 4.路由发现
+
+RocketMQ路由发现是非实时的，当Topic路由出现变化后，NameServer不主动推送给客户端，而是由客户端定时拉取主题最新的路由
+
+命令为 ：GET_ROUTEINTO_BY_TOPIC
+
+![image-20210907182103726](https://gitee.com/lifutian66/img/raw/master/img/image-20210907182103726.png)
+
+##### 3.消息发送
+
+可靠同步发送、可靠异步发送、单向发送
+
+消息生产者为 DefaultMQProducer
+
+###### 1.生产者启动
+
+ DefaultMQProducer#start   ->  DefaultMQProducerImpl#start
+
+检查配置，更改生产者  InstanceName改为进程 id，根据生成clientId 在缓存/创建  MQClientInstance，将信息（DefaultMQProducerImpl）添加到 
+
+MQClientInstance 的 生产者列表，启动 MQClientInstance
+
+![](https://gitee.com/lifutian66/img/raw/master/img/Snipaste_2021-09-08_10-27-31.png)
+
+###### 2.消息发送
+
+DefaultMQProducer# send ->   DefaultMQProducerImpl # send ->  # sendDefaultImpl
+
+方法参数说明： Message 发送的消息，CommunicationMode 发送消息模式（同步、异步、单次）、SendCallback 消息成功/异常的回调、timeout 超时时间
+
+默认3S，先查找发送地址，之后消息发送即可（# sendKernelImpl），（同步）消息发送重试 默认是 2次，总共发3次
+
+![image-20210909164501507](https://gitee.com/lifutian66/img/raw/master/img/image-20210909164501507.png)
+
+查找路由信息，先找缓存，否则从NameServer拉取信息，更新缓存
+
+![image-20210909170646378](https://gitee.com/lifutian66/img/raw/master/img/image-20210909170646378.png)
+
+从NameServer更新路由信息，先获取锁，isDefault为测试选项，生产是false
+
+true->测试用，使用默认topic,查到后，更新可读/可写队列为生产者队列数
+
+false->正式环境，给NameServer发消息，GET_ROUTEINFO_BY_TOPIC，获取其返回列表，根据返回信息进行缓存更新
+
+![image-20210909171940554](https://gitee.com/lifutian66/img/raw/master/img/image-20210909171940554.png)
+
+更新详情，更新 brokerAddrTable，producerTable，consumerTable
+
+![image-20210909171812060](https://gitee.com/lifutian66/img/raw/master/img/image-20210909171812060.png)
+
+根据返回的 TopicPublishInfo 查找发送消息的队列![image-20210910143534019](https://gitee.com/lifutian66/img/raw/master/img/image-20210910143534019.png)
+
+根据是否有故障延迟 规避不可用broker，剔除已经删了信息
+
+![image-20210910152159661](https://gitee.com/lifutian66/img/raw/master/img/image-20210910152159661.png)
+
+消息发送:  构建消息体( compressMsgBodyOverHowmuch 默认4K，超过即压缩 )，发送消息，执行前/后钩子函数
+
+![image-20210909182412132](https://gitee.com/lifutian66/img/raw/master/img/image-20210909182412132.png)
+
+消息发送，实现为 MQClientAPIImpl#sendMessage，具体如下， 消息发送
+
+单次  RemotingClient#invokeOneway
+
+异步  RemotingClient#invokeAsync
+
+同步  RemotingClient#invokeSync
+
+![image-20210910104805456](https://gitee.com/lifutian66/img/raw/master/img/image-20210910104805456.png)
+
+对于消息发送编码为 GET_ROUTEINFO_BY_TOPIC  在netty 中注册的处理器 是 SendMessageProcessor （BrokerController #initialize --> #registerProcessor）
+
+#sendMessage,校验broker,topic,检查队列，构建消息，消息最终存储
+
+![image-20210910140110102](https://gitee.com/lifutian66/img/raw/master/img/image-20210910140110102.png)
+
+##### 4.消息存储
+
+RocketMQ主要存储的文件包括Comitlog文件、ConsumeQueue文件、IndexFile文件
+
+将所有主题的消息存储在同一个文件中Comitlog
+
+每个消息主题包含多个消息消费队列，每一个消息队列有一个消息文件 ConsumeQueue文件
+
+IndexFile索引文件，其主要设计理念就是为了加速消息的检索性能，根据消息的属性快速从Commitlog文件中检索消息
+
+###### 1.消息存储流程
+
+消息发送为 this.brokerController.getMessageStore().putMessage(msgInner)
+
+实现为：DefaultMessageStore # putMessage
+
+
+
+
+
+##### 5.消息消费
+
+
+
+##### 6.消息过滤
+
+
+
+##### 7.主从
+
+##### 8.事务消息
+
+##### 9.实战
+
 #### 2.RabbitMq
+
+
 
 #### 3.Kafka
 

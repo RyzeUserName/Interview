@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="1.8" project-jdk-type="JavaSDK" />
+  <component name="ThriftCompiler">
+    <compilers>
+      <compiler url="C:\Users\Ezreal\Desktop\thrifu1\资料\code\thrift-0.11.0.exe" nowarn="no" strict="no" verbose="no" recurse="no" debug="no" allownegkeys="yes" allow64bitconsts="no" />
+    </compilers>
+  </component>
+</project>
