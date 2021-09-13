@@ -4143,11 +4143,45 @@ IndexFile索引文件，其主要设计理念就是为了加速消息的检索�
 
 消息发送为 this.brokerController.getMessageStore().putMessage(msgInner)
 
-实现为：DefaultMessageStore # putMessage
+实现为：DefaultMessageStore # putMessage--> #asyncPutMessage
 
+校验消息、状态、写消息
 
+![image-20210913140746908](https://gitee.com/lifutian66/img/raw/master/img/image-20210913140746908.png)
 
+详细的写，先处理延迟消息的topic、queueId
 
+![image-20210913141746019](https://gitee.com/lifutian66/img/raw/master/img/image-20210913141746019.png)
+
+获取写消息的 lastMappedFile,之后写即可  MappedFile# appendMessage -->  #appendMessagesInner
+
+![image-20210913142213803](https://gitee.com/lifutian66/img/raw/master/img/image-20210913142213803.png)
+
+获取写的缓存并设置当前指针位置，调用AppendMessageCallback # doAppend
+
+![image-20210913142930778](https://gitee.com/lifutian66/img/raw/master/img/image-20210913142930778.png)
+
+具体的写就是，获取偏移量，写入缓存即可
+
+![image-20210913161833137](https://gitee.com/lifutian66/img/raw/master/img/image-20210913161833137.png)
+
+######  2.存储文件 内存映射
+
+CommitLog 文件存在 ${ROCKET_HOME}/store/commitlog/  其封装为  **MappedFileQueue**，每个文件对应的是 **MappedFile**
+
+文件名为偏移量 ，**MappedFileQueue** 其属性 CopyOnWriteArrayList< MappedFil e> mappedFiles = new CopyOnWriteArrayList< MappedFile >()
+
+为 **MappedFile** 的集合
+
+![image-20210913162702500](https://gitee.com/lifutian66/img/raw/master/img/image-20210913162702500.png)
+
+**MappedFileQueue** 查找文件 MappedFile  目前有两个方法
+
+1.getMappedFileByTime    通过时间戳遍历循环 mappedFile.getLastModifiedTimestamp() >= timestamp
+
+2.findMappedFileByOffset 通过偏移量查找 (offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize)
+
+![image-20210913182017392](https://gitee.com/lifutian66/img/raw/master/img/image-20210913182017392.png)
 
 ##### 5.消息消费
 
