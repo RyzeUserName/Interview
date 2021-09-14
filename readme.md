@@ -4183,6 +4183,109 @@ CommitLog 文件存在 ${ROCKET_HOME}/store/commitlog/  其封装为  **MappedFi
 
 ![image-20210913182017392](https://gitee.com/lifutian66/img/raw/master/img/image-20210913182017392.png)
 
+文件映射为 **MappedFile**，属性意义，以及初始化
+
+![image-20210914095947740](https://gitee.com/lifutian66/img/raw/master/img/image-20210914095947740.png)
+
+![image-20210914100316260](https://gitee.com/lifutian66/img/raw/master/img/image-20210914100316260.png)
+
+MappedFile  # commit，真正提交为  # commit0，将脏页（writeBuffer）写入fileChannel, 也就是将byteBuffer中数据写入到channel
+
+![image-20210914101443137](https://gitee.com/lifutian66/img/raw/master/img/image-20210914101443137.png)
+
+![image-20210914101502257](https://gitee.com/lifutian66/img/raw/master/img/image-20210914101502257.png)
+
+MappedFile  # flush  将数据持久化到磁盘
+
+![image-20210914103340353](https://gitee.com/lifutian66/img/raw/master/img/image-20210914103340353.png)
+
+当 transientStorePoolEnable = true ，创建 TransientStorePool 线程池，数据先写入到缓存池中内存，然后由commit线程定时将数据从该缓存池中内存复制到物理文件对应的缓存中，TransientStorePool  使用堆外内存，利用com.sun.jna.Library 类库将内存锁定
+
+###### 3.存储文件
+
+存储路径 ${ROCKET_HOME}/store
+
+![image-20210914135517381](https://gitee.com/lifutian66/img/raw/master/img/image-20210914135517381.png)
+
+1.commitlog：消息存储目录,commitlog文件默认1G ，消息组织方式
+
+![image-20210914140257074](https://gitee.com/lifutian66/img/raw/master/img/image-20210914140257074.png)
+
+根据offset 查找文件以及物理下标，读取对应长度的消息 （ 查找消息）
+
+2.config：运行期间一些配置信息，主要包括下列信息
+	consumerFilter.json：主题消息过滤信息
+	consumerOffset.json：集群消费模式消息消费进度
+	delayOffset.json：延时消息队列拉取进度
+	subscriptionGroup.json：消息消费组配置信息
+	topics.json：topic配置属性
+
+3.consumequeue
+
+![image-20210914141822275](https://gitee.com/lifutian66/img/raw/master/img/image-20210914141822275.png)
+
+消息消费队列存储目录 消息消费的索引文件 consumequeue作为第一级目录消息主题，其下文件存储格式 mommitlog offset（8字节）+size（4字节）+tag hashcode（8字节）,单个文件默认 30w条，20字节 一条数据文件下标为其在消费组的逻辑偏移量，消息到达commitlog 之后专门线程产生消息转发任务，构建消费队列文件，ConsumeQueue 提供消息查找 1.根据下标 getIndexBuffer   2.根据时间 getOffsetInQueueByTime
+
+![image-20210914144304198](https://gitee.com/lifutian66/img/raw/master/img/image-20210914144304198.png)
+
+![image-20210914145313592](https://gitee.com/lifutian66/img/raw/master/img/image-20210914145313592.png)
+
+4.index：消息索引文件存储目录
+
+为消息建立索引机制，Hash索引  1.hash槽   2.hash冲突的链表
+
+![image-20210914145557356](https://gitee.com/lifutian66/img/raw/master/img/image-20210914145557356.png)
+
+IndexHead（开始、结束时间 开始、结束物理偏移量 hash槽、index 个数）  + hash槽 +index条目
+
+槽存储：k->消息索引键  v->消息物理偏移量+前一个冲突的物理偏移量（index条目逻辑下标）
+
+IndexFile # putKey 存储索引     indexFile # selectPhyOffset 查找索引
+
+![image-20210914155318845](https://gitee.com/lifutian66/img/raw/master/img/image-20210914155318845.png)
+
+![image-20210914155749833](https://gitee.com/lifutian66/img/raw/master/img/image-20210914155749833.png)
+
+5.abort：如果存在abort文件说明Broker非正常关闭，该文件默认启动时创建，正常退出之前删除
+
+6.checkpoint：文件检测点，存储commitlog文件最后一次刷盘时间戳、consumequeue最后一次刷盘时间、index索引文件最后一次刷盘时间戳。
+
+记录commitlog,consumequeue,index文件刷盘时间点，固定为4K，只有该文件的前24字节
+
+![image-20210914155956370](https://gitee.com/lifutian66/img/raw/master/img/image-20210914155956370.png)
+
+###### 4.更新消费队列索引文件
+
+commit log文件更新后，及时更新consumequeue和index 文件 该服务是在  BrokerStartup# start = BrokerController #start -->MessageStore # start -->
+
+ReputMessageService # run   reputMessageService 设置一个初始偏移量 （ 允许重复 =CommitLog的提交指针 不允许重复=Commitlog的内存中最大偏移量）
+
+![image-20210914162347930](https://gitee.com/lifutian66/img/raw/master/img/image-20210914162347930.png)
+
+内部实现为，根据偏移量循环读取，每条都会 CommitLogDispatcherBuildConsumeQueue、CommitLogDispatcherBuildIndex  的 dispatch方法
+
+![image-20210914173335435](https://gitee.com/lifutian66/img/raw/master/img/image-20210914173335435.png)
+
+CommitLogDispatcherBuildConsumeQueue # dispatch  -->  DefaultMessageStore #  putMessagePositionInfo
+
+根据主题和队列id找到消费的队列，之后调用队列的 putMessagePositionInfoWrapper--> putMessagePositionInfo
+
+![image-20210914173802767](https://gitee.com/lifutian66/img/raw/master/img/image-20210914173802767.png)
+
+![image-20210914175248472](https://gitee.com/lifutian66/img/raw/master/img/image-20210914175248472.png)
+
+CommitLogDispatcherBuildIndex  #  dispatch    根据 isMessageIndexEnable = true 开启 否则 忽略   DefaultMessageStore. IndexService  #  buildIndex
+
+先获取/创建 indexFile，之后放入hash索引即可，也是异步刷新到盘中
+
+![image-20210914180245454](https://gitee.com/lifutian66/img/raw/master/img/image-20210914180245454.png)
+
+###### 5.消息队列与索引恢复
+
+根据是否有 abort文件生成，判断是否是正常关闭，进行恢复
+
+![image-20210914181619227](https://gitee.com/lifutian66/img/raw/master/img/image-20210914181619227.png)
+
 ##### 5.消息消费
 
 
