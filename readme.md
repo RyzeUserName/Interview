@@ -4286,7 +4286,71 @@ CommitLogDispatcherBuildIndex  #  dispatch    根据 isMessageIndexEnable = true
 
 ![image-20210914181619227](https://gitee.com/lifutian66/img/raw/master/img/image-20210914181619227.png)
 
+commitlog读取目录下文件，文件大小校验，设置指针为文件大小
+
+ConsumeQueue读取目录下文件，获取该Broker存储的所有主题、队列，初始加载
+
+Checkpoint 加载存储检测点，检测点主要记录commitlog文件、Consumequeue文件、Index索引文件的刷盘点
+
+index 加载索引文件，如果上次异常退出，而且索引文件上次刷盘时间小于该索引文件最大的消息时间戳该文件将立即销毁。
+
+恢复： 根据Broker是否是正常停止执行不同的恢复策略
+
+1.先恢复 consumeque 文件，把不符合的 consueme 文件删除，一个 consume 条目正确的标准（commitlog偏移量 >0 size > 0）[从倒数第三个文件开始恢复]
+
+2.如果 abort文件存在，此时找到第一个正常的 commitlog 文件，然后对该文件重新进行转发，依次更新 consumeque,index文件
+
+###### 6.刷盘
+
+broker 设置 flushDiskType，ASYNC_FLUSH（异步刷盘）、SYNC_FLUSH（同步刷盘）
+
+![image-20210915105805283](https://gitee.com/lifutian66/img/raw/master/img/image-20210915105805283.png)
+
+同步刷盘：GroupCommitService   MappedByteBuffer#force,调用 mappedFileQueue#flush(0) 验证是否ok
+
+异步刷盘：未开启内存字节缓冲区 -->FlushRealTimeService  #run 调用 mappedFileQueue#flush
+
+​					开启内存字节缓冲区    -->CommitRealTimeService # run commit成功 调用  flushCommitLogService（根据配置同步异步选择）
+
+###### 7.定期删除
+
+非当前写文件在一定时间间隔未更新，会被认为是过期文件，可以被删除，默认间隔时间为72小时，其实现是在
+
+DefaultMessageStore# cleanFilesPeriodically -> CleanCommitLogService #run + CleanConsumeQueueService#run
+
+默认10s（cleanResourceInterval）执行一次
+
+CleanCommitLogService #run --> MappedFileQueue#deleteExpiredFileByTime  # redeleteHangedFile  删除过期文件，清除 mappedFileQueue中过期的
+
 ##### 5.消息消费
+
+基于拉模式，消息消费以组的模式开展，一个消费组内可以包含多个消费者，每一个消费组可订阅多个主题
+
+消费组之间有**集群**模式与**广播**模式两种消费模式
+
+集群模式，主题下的同一条消息只允许被其中一个消费者消费
+
+广播模式，主题下的同一条消息将被集群内的所有消费者消费一次
+
+支持**局部顺序**消息消费，也就是保证**同一个消息队列**上的消息顺序消费。不支持消息全局顺序消费（可设置队列数为1 牺牲高可用）
+
+支持两种消息**过滤模式**：表达式（TAG、SQL92）与类过滤模式
+
+###### 1.负载与重新发布
+
+实现类为 DefaultMQPushConsumer#start-->DefaultMQPushConsumerImpl#start
+
+
+
+###### 2.消费模式
+
+###### 3.拉取
+
+###### 4.进度反馈
+
+###### 5.消息过滤
+
+###### 6.顺序消息
 
 
 
