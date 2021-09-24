@@ -4324,7 +4324,7 @@ CleanCommitLogService #run --> MappedFileQueue#deleteExpiredFileByTime  # redele
 
 ##### 5.消息消费
 
-基于拉模式，消息消费以组的模式开展，一个消费组内可以包含多个消费者，每一个消费组可订阅多个主题
+基于**拉**模式，消息消费以组的模式开展，一个消费组内可以包含多个消费者，每一个消费组可订阅多个主题
 
 消费组之间有**集群**模式与**广播**模式两种消费模式
 
@@ -4338,15 +4338,47 @@ CleanCommitLogService #run --> MappedFileQueue#deleteExpiredFileByTime  # redele
 
 ###### 1.负载与重新发布
 
-实现类为 DefaultMQPushConsumer#start-->DefaultMQPushConsumerImpl#start
+rocket 提供**推**和**拉**两种方式供消息消费，**推模式**  实现类为 DefaultMQPushConsumer#start-->DefaultMQPushConsumerImpl#start 如下：
 
+![image-20210916153701458](https://gitee.com/lifutian66/img/raw/master/img/image-20210916153701458.png)
 
+其实不管消费者还是生产者其启动都是调用MQClientInstance#start ，调用 **PullMessageService**#start 拉取消息，从拉取消息队列获取一个拉去任务，执行pullMessage，没有拉去任务 将会阻塞到可获取任务为止，那么pullRequestQueue 中的PullRequest 是怎么来的呢？
+
+![image-20210916180227300](https://gitee.com/lifutian66/img/raw/master/img/image-20210916180227300.png)
+
+实际上 是  PullMessageService  # executePullRequestLater---> #executePullRequestImmediately
+
+![image-20210917103735303](https://gitee.com/lifutian66/img/raw/master/img/image-20210917103735303.png)
+
+调用这个方法的地方是：
+
+1.DefaultMQPushConsumerImpl#pullMessage 也就是上面获取pullRequest 之后调用的方法
+
+2.RebalancePushImpl#dispatchPullRequest  这个是消息队列负载 实现，调用为 DefaultMQPushConsumerImpl 推模式的下会调用
+
+![image-20210917104249830](https://gitee.com/lifutian66/img/raw/master/img/image-20210917104249830.png)
+
+**拉**模式只需要提供api即可，消费端获取客户端返回信息 实现为 MQClientInstance # start --> PullMessageService #pullMessage 其实上面已经解释了
+
+由DefaultMQPushConsumerImpl #pullMessage  调用过来，**消息限流**(消息总数>100  最大间距>2000  消息大小>100M)，构建消息，最后发送
+
+![image-20210917152714874](https://gitee.com/lifutian66/img/raw/master/img/image-20210917152714874.png)
+
+之后便是消息内容构建，最后发送
+
+ ![image-20210917152852722](https://gitee.com/lifutian66/img/raw/master/img/image-20210917152852722.png)
+
+PullAPIWrapper#pullKernelImpl
 
 ###### 2.消费模式
 
+
+
 ###### 3.拉取
 
-###### 4.进度反馈
+
+
+###### 4.定时消息
 
 ###### 5.消息过滤
 
