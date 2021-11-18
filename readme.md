@@ -3737,7 +3737,7 @@ void notifyKeyspaceEvent(type, event, key, dbid);
 
 ##### 1.RDB
 
-**写入**：可以手动执行（save-阻塞  bgsave->子进程），也可以根据配置  save 选项 定期/定量 执行 保存一个压缩的全量二进制文件
+**写入**：可以手动执行（save-阻塞  bgsave->子进程）,copy-on-write，也可以根据配置  save 选项 定期/定量 执行 保存一个压缩的全量二进制文件
 
 **载入:**
 
