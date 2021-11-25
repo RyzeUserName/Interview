@@ -4417,9 +4417,60 @@ PullAPIWrapper#pullKernelImpl
 
 事务的特点 ： ACID，原子性、一致性、隔离性、持久性
 
-CAP：一个分布式系统不可能同时满足**一致性**、**可用性** 和 **分区容错性**
+**CAP**：一个分布式系统不可能同时满足**一致性**、**可用性** 和 **分区容错性**
 
-BASE: 
+![image-20211123104815672](https://gitee.com/lifutian66/img/raw/master/img/image-20211123104815672.png)
+
+**BASE**: 基本可用、软状态、最终一致性
+
+##### 3.一致性协议
+
+**2pc**:  提交事务请求 (协调者事务询问->执行事务->各参与者反馈事务结果 给协调者) 
+
+​		  执行事务提交（各参与者根据协调者反馈结果执行 commit/rollback）
+
+​		 **优缺点**：原理简单，实现方便，同步阻塞、单点问题、脑裂、保守
+
+![image-20211123150859140](https://gitee.com/lifutian66/img/raw/master/img/image-20211123150859140.png)
+
+![image-20211123150911898](https://gitee.com/lifutian66/img/raw/master/img/image-20211123150911898.png)
+
+**3pc**：
+
+CanCommit   事务询问   各参与者反馈
+
+PreCommit  发送预提交   事务预提交    各参者反馈结果
+
+doCommit  发送提交请求 事务提交/回滚
+
+**优缺点**： 网络分区 造成事务不一致
+
+![image-20211123152515144](https://gitee.com/lifutian66/img/raw/master/img/image-20211123152515144.png)
+
+##### 4.paxos
+
+1. 第一阶段：Prepare阶段。Proposer向Acceptors发出Prepare请求，Acceptors针对收到的Prepare请求进行Promise承诺。
+
+2. 第二阶段：Accept阶段。Proposer收到多数Acceptors承诺的Promise后，向Acceptors发出Propose请求，Acceptors针对收到的Propose请求进行Accept处理。
+
+3. 第三阶段：Learn阶段。Proposer在收到多数Acceptors的Accept之后，标志着本次Accept成功，决议形成，将形成的决议发送给所有Learners。
+
+   Paxos算法流程中的每条消息描述如下：
+
+   - **Prepare**: Proposer生成全局唯一且递增的Proposal ID (可使用时间戳加Server ID)，向所有Acceptors发送Prepare请求，这里无需携带提案内容，只携带Proposal ID即可。
+   - **Promise**: Acceptors收到Prepare请求后，做出“两个承诺，一个应答”。
+
+   **两个承诺**：
+
+   1. 不再接受Proposal ID小于等于（注意：这里是<= ）当前请求的Prepare请求。
+
+   2. 不再接受Proposal ID小于（注意：这里是< ）当前请求的Propose请求。
+
+   **一个应答**：
+
+   不违背以前作出的承诺下，回复已经Accept过的提案中Proposal ID最大的那个提案的Value和Proposal ID，没有则返回空值。
+
+![preview](https://gitee.com/lifutian66/img/raw/master/img/v2-a6cd35d4045134b703f9d125b1ce9671_r.jpg)
 
 #### 2.Raft
 
