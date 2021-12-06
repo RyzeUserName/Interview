@@ -4449,30 +4449,55 @@ doCommit  发送提交请求 事务提交/回滚
 
 ##### 4.paxos
 
-1. 第一阶段：Prepare阶段。Proposer向Acceptors发出Prepare请求，Acceptors针对收到的Prepare请求进行Promise承诺。
+原文地址
 
-2. 第二阶段：Accept阶段。Proposer收到多数Acceptors承诺的Promise后，向Acceptors发出Propose请求，Acceptors针对收到的Propose请求进行Accept处理。
+https://www.cnblogs.com/linbingdong/p/6253479.html
 
-3. 第三阶段：Learn阶段。Proposer在收到多数Acceptors的Accept之后，标志着本次Accept成功，决议形成，将形成的决议发送给所有Learners。
+- **Proposer**
 
-   Paxos算法流程中的每条消息描述如下：
+   提案给Acceptor，只要Proposer发的提案被Acceptor接受，Proposer就认为该提案里的value被选定了
 
-   - **Prepare**: Proposer生成全局唯一且递增的Proposal ID (可使用时间戳加Server ID)，向所有Acceptors发送Prepare请求，这里无需携带提案内容，只携带Proposal ID即可。
-   - **Promise**: Acceptors收到Prepare请求后，做出“两个承诺，一个应答”。
+- **Acceptor**
 
-   **两个承诺**：
+  接收Proposer提案，只要Acceptor接受了某个提案，Acceptor就任为该提案里的value被选定了
 
-   1. 不再接受Proposal ID小于等于（注意：这里是<= ）当前请求的Prepare请求。
+- **Learners**
 
-   2. 不再接受Proposal ID小于（注意：这里是< ）当前请求的Propose请求。
+  接收Acceptor，Acceptor告诉Learner哪个value被选定，Learner就认为那个value被选定。
 
-   **一个应答**：
+在具体的实现中，一个进程可能**同时充当多种角色**。比如一个进程可能**既是Proposer又是Acceptor又是Learner**。
 
-   不违背以前作出的承诺下，回复已经Accept过的提案中Proposal ID最大的那个提案的Value和Proposal ID，没有则返回空值。
+- **阶段一：**
 
-![preview](https://gitee.com/lifutian66/img/raw/master/img/v2-a6cd35d4045134b703f9d125b1ce9671_r.jpg)
+  (a) Proposer选择一个**提案编号N**，然后向**半数以上**的Acceptor发送编号为N的**Prepare请求**。
 
-#### 2.Raft
+  (b) 如果一个Acceptor收到一个编号为N的Prepare请求，且N**大于**该Acceptor已经**响应过的**所有**Prepare请求**的编号，那么它就会将它已经**接受过的编号最大的提案（如果有的话）**作为响应反馈给Proposer，同时该Acceptor承诺**不再接受**任何**编号小于N的提案**。
+
+- **阶段二：**
+
+  (a) 如果Proposer收到**半数以上**Acceptor对其发出的编号为N的Prepare请求的**响应**，那么它就会发送一个针对**[N,V]提案**的**Accept请求**给**半数以上**的Acceptor。注意：V就是收到的**响应**中**编号最大的提案的value**，如果响应中**不包含任何提案**，那么V就由Proposer**自己决定**。
+
+  (b) 如果Acceptor收到一个针对编号为N的提案的Accept请求，只要该Acceptor**没有**对编号**大于N**的**Prepare请求**做出过**响应**，它就**接受该提案**。
+
+![Paxos算法流程](https://gitee.com/lifutian66/img/raw/master/img/1752522-44c5a422f917bfc5.jpg)
+
+Learner学习（获取）被选定的value有如下三种方案：
+
+![幻灯片17.png](https://gitee.com/lifutian66/img/raw/master/img/1752522-0fab48ed2bdf358a.png)
+
+#### 2.ZAB
+
+一种  **`主备模式`** 的系统架构来**保持集群中各个副本之间`数据一致性`**，包括`消息广播`,`崩溃恢复`
+
+消息广播：
+
+![enter image description here](https://gitee.com/lifutian66/img/raw/master/img/20170830143129971)
+
+崩溃恢复：
+
+
+
+#### 3.Raft
 
 ### 10.框架
 
